@@ -1,9 +1,9 @@
 #!/bin/bash
 
-PYTHON_VERSION=3.13
+PYTHON_VERSION=3.12
 
-python$PYTHON_VERSION -m pip install uv
-python$PYTHON_VERSION -m uv venv venv --seed --python=$PYTHON_VERSION
+python$PYTHON_VERSION -m pipx install uv
+uv venv venv --seed --python=$PYTHON_VERSION
 source venv/bin/activate
 pip install uv
 uv pip install -r requirements-dev.txt
