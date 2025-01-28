@@ -162,7 +162,7 @@ class HomeComAlt:
         except ClientResponseError as error:
             if error.status == HTTPStatus.UNAUTHORIZED.value:
                 raise AuthFailedError("Authorization has failed") from error
-            if error.status == HTTPStatus.BAD_REQUEST.value and url == "https://singlekey-id.com/auth/connect/token"
+            if error.status == HTTPStatus.BAD_REQUEST.value and url == "https://singlekey-id.com/auth/connect/token":
                 return None
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
