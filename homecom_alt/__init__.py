@@ -546,8 +546,8 @@ class HomeComAlt:
                 except ValueError as error:
                     raise InvalidSensorDataError("Invalid devices data") from error
     
-                if response_json:
-                    return response_json
+            if response_json:
+                return response_json
 
         response = await self.do_auth()
         if response:            
