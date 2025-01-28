@@ -84,7 +84,7 @@ async def main():
             device_ids: list[str] = []
             # get devices synced with homecom easy
             devices = await bhc.async_get_devices()
-            # get status for each device discovered
+            # print each device discovered
             for device in await devices:
                 print(f"Device={device["deviceId"]}, type={device["deviceType"]}")
                 device_ids.append(device["deviceId"])
