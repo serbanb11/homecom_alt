@@ -6,7 +6,7 @@ from setuptools import setup
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
-VERSION = "1.0.0"
+VERSION = "1.0.4"
 
 setup(
     name="homecom_alt",
@@ -21,7 +21,7 @@ setup(
     packages=["homecom_alt"],
     package_data={"homecom_alt": ["py.typed"]},
     python_requires=">=3.12",
-    install_requires=["aiohttp>=3.9.4", "tenacity"],
+    install_requires=["aiohttp>=3.9.4", "tenacity", "PyJWT>=2.1.0"],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: MIT License",

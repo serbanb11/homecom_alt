@@ -9,7 +9,6 @@ from typing import Any, Optional
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse, urlencode
 import jwt
-import ssl
 import math
 import random
 import base64
@@ -142,10 +141,6 @@ class HomeComAlt:
         headers = {
             "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
         }
-        proxy = "http://192.168.44.24:8080"
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
         # JSON request
         if type == 1:
             headers["Content-Type"] = "application/json; charset=UTF-8"
@@ -162,8 +157,6 @@ class HomeComAlt:
                 json=data if type == 1 else None,
                 timeout=DEFAULT_TIMEOUT,
                 headers=headers,
-                proxy=proxy,
-                ssl=ssl_context,
                 allow_redirects=True,
             )
         except ClientResponseError as error:
@@ -564,15 +557,11 @@ class HomeComAlt:
 
     async def handle_redirect(self, headers: list) -> dict | None:
         """Handle redirection to extract the authorization code."""
-        proxy = "http://192.168.44.24:8080"
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
         try:
             location = headers.get("Location")
             if location:
                 async with self._session.get(
-                    urlparse(location).geturl(), allow_redirects=False, proxy=proxy, ssl=ssl_context,
+                    urlparse(location).geturl(), allow_redirects=False,
                 ) as final_response:
                     location_query_params = parse_qs(
                         urlparse(final_response.headers.get("Location", "")).query
@@ -586,10 +575,6 @@ class HomeComAlt:
 
     async def do_auth_step1(self, params: dict) -> tuple[str, str]:
         """GET CSRF token from singlekey-id."""
-        proxy = "http://192.168.44.24:8080"
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
         response = await self._async_http_request("get", OAUTH_DOMAIN + OAUTH_LOGIN + "?"+ urlencode(params) + "&" + urlencode(OAUTH_LOGIN_PARAMS))
         return str(response.url), extract_verification_token(await response.text())
 
@@ -613,17 +598,11 @@ class HomeComAlt:
             "__RequestVerificationToken": csrf_token,
         }
         """Get firmware."""
-        proxy = "http://192.168.44.24:8080"
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
         try:
             return await self._session.post(
                 url,
                 data=pass_payload,
                 allow_redirects=False,
-                proxy=proxy,
-                ssl=ssl_context,
             )
         except ClientResponseError as error:
             raise AuthFailedError("Authorization has failed") from error
@@ -644,10 +623,6 @@ class HomeComAlt:
         response = await self.do_auth_step3(response_url, csrf_token)
 
         """Get firmware."""
-        proxy = "http://192.168.44.24:8080"
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
         try:
             # First redirect
             async with self._session.get(
@@ -656,8 +631,6 @@ class HomeComAlt:
                 + response.host
                 + response.headers.get("Location"),
                 allow_redirects=False,
-                proxy=proxy,
-                ssl=ssl_context,
             ) as respose:
                 # Get and parse the Location header from the response
                 location_query_params = parse_qs(
