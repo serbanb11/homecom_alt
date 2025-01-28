@@ -163,7 +163,7 @@ class HomeComAlt:
             if error.status == HTTPStatus.UNAUTHORIZED.value:
                 raise AuthFailedError("Authorization has failed") from error
             raise ApiError(
-                f"Invalid response from device {self.host}: {error.status}"
+                f"Invalid response from url {url}: {error.status}"
             ) from error
         except (TimeoutError, ClientConnectorError) as error:
             _LOGGER.error("Invalid response from url: %s", url)
