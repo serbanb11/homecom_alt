@@ -162,6 +162,8 @@ class HomeComAlt:
         except ClientResponseError as error:
             if error.status == HTTPStatus.UNAUTHORIZED.value:
                 raise AuthFailedError("Authorization has failed") from error
+            if error.status == HTTPStatus.BAD_REQUEST.value and url == "https://singlekey-id.com/auth/connect/token"
+                return None
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
             ) from error
@@ -538,13 +540,14 @@ class HomeComAlt:
             response = await self._async_http_request(
                 "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
             )
-            try:
-                response_json = await response.json()
-            except ValueError as error:
-                raise InvalidSensorDataError("Invalid devices data") from error
-
-            if response_json:
-                return response_json
+            if response is not None
+                try:
+                    response_json = await response.json()
+                except ValueError as error:
+                    raise InvalidSensorDataError("Invalid devices data") from error
+    
+                if response_json:
+                    return response_json
 
         response = await self.do_auth()
         if response:            
