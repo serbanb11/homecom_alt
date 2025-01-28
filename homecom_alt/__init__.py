@@ -540,7 +540,7 @@ class HomeComAlt:
             response = await self._async_http_request(
                 "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
             )
-            if response is not None
+            if response is not None:
                 try:
                     response_json = await response.json()
                 except ValueError as error:
