@@ -545,9 +545,11 @@ class HomeComAlt:
                     response_json = await response.json()
                 except ValueError as error:
                     raise InvalidSensorDataError("Invalid devices data") from error
-    
-            if response_json:
-                return response_json
+
+                if response_json:
+                    self._options.token = response_json["access_token"]
+                    self._options.refresh_token = response_json["refresh_token"]
+                    return True
 
         response = await self.do_auth()
         if response:            
