@@ -1,4 +1,4 @@
-"""Setup module for nettigo_air_monitor."""
+"""Setup module for homecom_alt."""
 
 from pathlib import Path
 

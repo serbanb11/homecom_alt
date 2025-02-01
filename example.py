@@ -1,3 +1,5 @@
+"""An example of using homecom_alt package."""
+
 import asyncio
 import logging
 
@@ -6,10 +8,10 @@ from aiohttp import ClientConnectorError, ClientError, ClientSession
 from homecom_alt import (
     ApiError,
     AuthFailedError,
-    ConnectionOptions,
-    InvalidSensorDataError,
-    HomeComAlt,
     BHCDevice,
+    ConnectionOptions,
+    HomeComAlt,
+    InvalidSensorDataError,
 )
 
 logging.basicConfig(level=logging.DEBUG)
@@ -17,7 +19,9 @@ logging.basicConfig(level=logging.DEBUG)
 USERNAME = "user"
 PASSWORD = "password"
 
-def print_status(data: BHCDevice):
+
+def print_status(data: BHCDevice) -> None:
+    """Print device status."""
     print("firmware: {data.firmware}")
     print("notifications: {data.notifications}")
     for ref in data.stardard_functions:
@@ -25,20 +29,36 @@ def print_status(data: BHCDevice):
 
         match normalized_id:
             case "operationMode":
-                print(f"operationMode current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"operationMode current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case "acControl":
-                print(f"acControl current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"acControl current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case "fanSpeed":
-                print(f"fanSpeed current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"fanSpeed current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case "airFlowHorizontal":
-                print(f"airFlowHorizontal current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"airFlowHorizontal current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case "airFlowVertical":
-                print(f"airFlowVertical current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"airFlowVertical current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case "temperatureSetpoint":
-                print(f"temperatureSetpoint current_value: {ref["value"]}{ref["unitOfMeasure"]}")
-                print(f"temperatureSetpoint min_value: {ref["minValue"]} max_value: {ref["maxValue"]}")
+                print(
+                    f"temperatureSetpoint current_value: {ref['value']}{ref['unitOfMeasure']}"
+                )
+                print(
+                    f"temperatureSetpoint min_value: {ref['minValue']} max_value: {ref['maxValue']}"
+                )
             case "roomTemperature":
-                print(f"roomTemperature current_value: {ref["value"]}{ref["unitOfMeasure"]}")
+                print(
+                    f"roomTemperature current_value: {ref['value']} {ref['unitOfMeasure']}"
+                )
             case _:
                 pass
 
@@ -47,17 +67,25 @@ def print_status(data: BHCDevice):
 
         match normalized_id:
             case "airPurificationMode":
-                print(f"plasmacluster current_value: {ref["value"]}")
+                print(f"plasmacluster current_value: {ref['value']}")
             case "fullPowerMode":
-                print(f"boost current_value: {ref["value"]}")
+                print(f"boost current_value: {ref['value']}")
             case "ecoMode":
-                print(f"eco mode current_value: {ref["value"]}")
+                print(f"eco mode current_value: {ref['value']}")
             case "timers/on":
-                print(f"timer turn on current_value: {ref["value"]} {ref["unitOfMeasure"]}")
-                print(f"timer turn on min_value: {ref["minValue"]} max_value: {ref["maxValue"]}")
+                print(
+                    f"timer turn on current_value: {ref['value']} {ref['unitOfMeasure']}"
+                )
+                print(
+                    f"timer turn on min_value: {ref['minValue']} max_value: {ref['maxValue']}"
+                )
             case "timers/off":
-                print(f"timer turn off current_value: {ref["value"]} {ref["unitOfMeasure"]}")
-                print(f"timer turn off min_value: {ref["minValue"]} max_value: {ref["maxValue"]}")
+                print(
+                    f"timer turn off current_value: {ref['value']} {ref['unitOfMeasure']}"
+                )
+                print(
+                    f"timer turn off min_value: {ref['minValue']} max_value: {ref['maxValue']}"
+                )
             case _:
                 pass
 
@@ -66,13 +94,16 @@ def print_status(data: BHCDevice):
 
         match normalized_id:
             case "switchPrograms/enabled":
-                print(f"programs current_value: {ref["value"]}")
+                print(f"programs current_value: {ref['value']}")
             case "switchPrograms/activeProgram":
-                print(f"program current_value: {ref["value"]}, allowed_values: {ref["allowedValues"]}")
+                print(
+                    f"program current_value: {ref['value']}, allowed_values: {ref['allowedValues']}"
+                )
             case _:
                 pass
 
-async def main():
+
+async def main() -> None:
     """Run main function."""
     options = ConnectionOptions(username=USERNAME, password=PASSWORD)
 
@@ -86,11 +117,13 @@ async def main():
             devices = await bhc.async_get_devices()
             # print each device discovered
             for device in await devices:
-                print(f"Device={device["deviceId"]}, type={device["deviceType"]}")
+                print(f"Device={device['deviceId']}, type={device['deviceType']}")
                 device_ids.append(device["deviceId"])
 
             while True:
-                device_id = input(f"Enter the device you want to control: {', '.join(device_ids)}")
+                device_id = input(
+                    f"Enter the device you want to control: {', '.join(device_ids)}"
+                )
                 if device_id not in device_ids:
                     print("device_id not in the list of devices")
                     continue
@@ -127,7 +160,7 @@ async def main():
                     print_status(data)
                 elif choice == "2":
                     time: dict = await bhc.async_get_time(device_id)
-                    print(f"time: {time["value"]}")
+                    print(f"time: {time['value']}")
                 elif choice == "3":
                     await bhc.async_turn_on(device_id)
                 elif choice == "4":
@@ -171,7 +204,12 @@ async def main():
                         ),
                         None,
                     )
-                    print("min_temp: ", values["minValue"], "max_temp: ", values["maxValue"])
+                    print(
+                        "min_temp: ",
+                        values["minValue"],
+                        "max_temp: ",
+                        values["maxValue"],
+                    )
                     temp = round(float(input("Enter temp: ").strip()), 1)
                     if temp > values["minValue"] and temp < values["maxValue"]:
                         await bhc.async_set_temperature(device_id, temp)
@@ -186,8 +224,13 @@ async def main():
                         ),
                         None,
                     )
-                    print("Allowed airFlowHorizontal modes:", ", ".join(values["allowedValues"]))
-                    air_mode = input("Enter airFlowHorizontal fan mode: ").strip().lower()
+                    print(
+                        "Allowed airFlowHorizontal modes:",
+                        ", ".join(values["allowedValues"]),
+                    )
+                    air_mode = (
+                        input("Enter airFlowHorizontal fan mode: ").strip().lower()
+                    )
                     if air_mode in values["allowedValues"]:
                         await bhc.async_set_horizontal_swing_mode(device_id, air_mode)
                     else:
@@ -201,7 +244,10 @@ async def main():
                         ),
                         None,
                     )
-                    print("Allowed airFlowVertical modes:", ", ".join(values["allowedValues"]))
+                    print(
+                        "Allowed airFlowVertical modes:",
+                        ", ".join(values["allowedValues"]),
+                    )
                     air_mode = input("Enter the airFlowVertical mode: ").strip().lower()
                     if air_mode in values["allowedValues"]:
                         await bhc.async_set_vertical_swing_mode(device_id, air_mode)
@@ -211,21 +257,21 @@ async def main():
                     print("Allowed plasmacluster mode:", ", ".join(allowed_bool))
                     mode = input("Enter the plasmacluster mode: ").strip().lower()
                     if mode in allowed_bool:
-                        await bhc.async_set_plasmacluster(device_id, True if "on" else False)
+                        await bhc.async_set_plasmacluster(device_id, bool(mode == "on"))
                     else:
                         print("Invalid mode.")
                 elif choice == "11":
                     print("Allowed boost mode:", ", ".join(allowed_bool))
                     mode = input("Enter the boost mode: ").strip().lower()
                     if mode in allowed_bool:
-                        await bhc.async_set_boost(device_id, True if "on" else False)
+                        await bhc.async_set_boost(device_id, bool(mode == "on"))
                     else:
                         print("Invalid mode.")
                 elif choice == "12":
                     print("Allowed eco modes:", ", ".join(allowed_bool))
                     mode = input("Enter the eco mode: ").strip().lower()
                     if mode in allowed_bool:
-                        await bhc.async_set_eco(device_id, True if "on" else False)
+                        await bhc.async_set_eco(device_id, bool(mode == "on"))
                     else:
                         print("Invalid mode.")
                 elif choice == "13":
@@ -237,7 +283,14 @@ async def main():
                         ),
                         None,
                     )
-                    print("min_value: ", values["minValue"], values["unitOfMeasure"], "max_value: ", values["maxValue"], values["unitOfMeasure"])
+                    print(
+                        "min_value: ",
+                        values["minValue"],
+                        values["unitOfMeasure"],
+                        "max_value: ",
+                        values["maxValue"],
+                        values["unitOfMeasure"],
+                    )
                     timer = int(input("Enter timer: ").strip())
                     if timer >= values["minValue"] and timer <= values["maxValue"]:
                         await bhc.async_time_on(device_id, timer)
@@ -252,7 +305,14 @@ async def main():
                         ),
                         None,
                     )
-                    print("min_value: ", values["minValue"], values["unitOfMeasure"], "max_value: ", values["maxValue"], values["unitOfMeasure"])
+                    print(
+                        "min_value: ",
+                        values["minValue"],
+                        values["unitOfMeasure"],
+                        "max_value: ",
+                        values["maxValue"],
+                        values["unitOfMeasure"],
+                    )
                     timer = int(input("Enter timer: ").strip())
                     if timer >= values["minValue"] and timer <= values["maxValue"]:
                         await bhc.async_time_off(device_id, timer)
@@ -278,7 +338,10 @@ async def main():
                     else:
                         print("Invalid program.")
                 elif choice == "18":
-                    temp_device_id = input("Enter the device you want to control: ", {', '.join(device_ids)})
+                    temp_device_id = input(
+                        "Enter the device you want to control: ",
+                        {", ".join(device_ids)},
+                    )
                     if temp_device_id not in device_ids:
                         print("device_id not in the list of devices")
                         continue
@@ -290,16 +353,16 @@ async def main():
                     break
                 else:
                     print("Invalid choice. Please select a valid option from 0 to 18.")
-
         except (
+            TimeoutError,
             ApiError,
             AuthFailedError,
             ClientConnectorError,
             ClientError,
             InvalidSensorDataError,
-            asyncio.TimeoutError,
         ) as error:
             print(f"Error: {error}")
+
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())

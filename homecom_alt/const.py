@@ -1,4 +1,4 @@
-"""Constants for nettigo-air-monitor library."""
+"""Constants for homecom_alt library."""
 
 from typing import Final
 
@@ -11,7 +11,13 @@ OAUTH_LOGIN_PARAMS: Final[dict] = {
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
     "response_type": "code",
     "prompt": "login",
-    "scope": "openid email profile offline_access pointt.gateway.claiming pointt.gateway.removal pointt.gateway.list pointt.gateway.users pointt.gateway.resource.dashapp pointt.castt.flow.token-exchange bacon hcc.tariff.read",
+    "scope": (
+        "openid email profile offline_access "
+        "pointt.gateway.claiming pointt.gateway.removal "
+        "pointt.gateway.list pointt.gateway.users "
+        "pointt.gateway.resource.dashapp pointt.castt.flow.token-exchange "
+        "bacon hcc.tariff.read"
+    ),
     "code_challenge_method": "S256",
     "style_id": "tt_bsch",
 }
@@ -22,7 +28,7 @@ OAUTH_PARAMS: Final[dict] = {
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
 }
 
-OAUTH_REFRESH_PARAMS: Final[str] = {
+OAUTH_REFRESH_PARAMS: Final[dict[str, str]] = {
     "grant_type": "refresh_token",
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
 }
@@ -34,7 +40,9 @@ BOSCHCOM_ENDPOINT_NOTIFICATIONS: Final[str] = "/resource/notifications"
 BOSCHCOM_ENDPOINT_STANDARD: Final[str] = "/resource/airConditioning/standardFunctions"
 BOSCHCOM_ENDPOINT_ADVANCED: Final[str] = "/resource/airConditioning/advancedFunctions"
 BOSCHCOM_ENDPOINT_SWITCH: Final[str] = "/resource/airConditioning/switchPrograms/list"
-BOSCHCOM_ENDPOINT_SWITCH_ENABLE: Final[str] = "/resource/airConditioning/switchPrograms/enabled"
+BOSCHCOM_ENDPOINT_SWITCH_ENABLE: Final[str] = (
+    "/resource/airConditioning/switchPrograms/enabled"
+)
 BOSCHCOM_ENDPOINT_SWITCH_PROGRAM: Final[str] = (
     "/resource/airConditioning/switchPrograms/activeProgram"
 )
@@ -47,9 +55,15 @@ BOSCHCOM_ENDPOINT_CONTROL: Final[str] = "/resource/airConditioning/acControl"
 BOSCHCOM_ENDPOINT_FULL_POWER: Final[str] = "/resource/airConditioning/fullPowerMode"
 BOSCHCOM_ENDPOINT_ECO: Final[str] = "/resource/airConditioning/ecoMode"
 BOSCHCOM_ENDPOINT_FAN_SPEED: Final[str] = "/resource/airConditioning/fanSpeed"
-BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL: Final[str] = "/resource/airConditioning/airFlowVertical"
-BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL: Final[str] = "/resource/airConditioning/airFlowHorizontal"
-BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = "/resource/airConditioning/airPurificationMode"
+BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL: Final[str] = (
+    "/resource/airConditioning/airFlowVertical"
+)
+BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL: Final[str] = (
+    "/resource/airConditioning/airFlowHorizontal"
+)
+BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
+    "/resource/airConditioning/airPurificationMode"
+)
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"
@@ -66,3 +80,6 @@ ATTR_TIMERS_ON: Final[str] = "timersOn"
 ATTR_TIMERS_OFF: Final[str] = "timersOff"
 
 DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=5)
+
+URLENCODED: Final[int] = 2
+JSON: Final[int] = 1

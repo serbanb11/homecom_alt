@@ -14,9 +14,8 @@ class ConnectionOptions:
 
     def __post_init__(self) -> None:
         """Call after initialization."""
-        if self.username is not None:
-            if self.password is None:
-                raise ValueError("Supply both username and password")
+        if self.username is not None and self.password is None:
+            raise ValueError("Supply both username and password")
 
 
 @dataclass(frozen=True)
