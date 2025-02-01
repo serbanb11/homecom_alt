@@ -184,7 +184,7 @@ class HomeComAlt:
             raise NotRespondingError(f"{url} is not responding") from error
 
         _LOGGER.debug("Data retrieved from %s, status: %s", url, resp.status)
-        if resp.status != (HTTPStatus.OK.value | HTTPStatus.NO_CONTENT.value):
+        if resp.status not in {HTTPStatus.OK.value, HTTPStatus.NO_CONTENT.value}:
             raise ApiError(f"Invalid response from {url}: {resp.status}")
 
         return resp
