@@ -19,7 +19,7 @@ class ConnectionOptions:
 
 
 @dataclass(frozen=True)
-class BHCDevice:
+class BHCDeviceRac:
     """Data class for BHC device."""
 
     device: str | None
@@ -28,3 +28,14 @@ class BHCDevice:
     stardard_functions: list | None
     advanced_functions: list | None
     switch_programs: list | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceK40:
+    """Data class for BHC device."""
+
+    device: str | None
+    firmware: list | None
+    notifications: list | None
+    dhw_circuits: list | None
+    heating_circuits: list | None

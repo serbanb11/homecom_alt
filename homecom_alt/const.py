@@ -64,6 +64,8 @@ BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL: Final[str] = (
 BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
     "/resource/airConditioning/airPurificationMode"
 )
+BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
+BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"

@@ -35,11 +35,13 @@ from .const import (
     BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL,
     BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL,
     BOSCHCOM_ENDPOINT_CONTROL,
+    BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
+    BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
@@ -67,7 +69,7 @@ from .exceptions import (
     InvalidSensorDataError,
     NotRespondingError,
 )
-from .model import BHCDevice, ConnectionOptions
+from .model import BHCDeviceK40, BHCDeviceRac, ConnectionOptions
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -235,6 +237,188 @@ class HomeComAlt:
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
+    async def async_get_pv_list(self, device_id: str) -> Any:
+        """Get pv list."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_PV_LIST,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_time(self, device_id: str) -> Any:
+        """Get switch."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_TIME,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    def check_jwt(self) -> bool:
+        """Check if token is expired."""
+        if not self._options.token:
+            return False
+        try:
+            exp = jwt.decode(
+                self._options.token, options={"verify_signature": False}
+            ).get("exp")
+            if exp is None:
+                _LOGGER.error("Token missing 'exp' claim")
+            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC)
+        except jwt.DecodeError as err:
+            _LOGGER.error("Invalid token: %s", err)
+            return False
+
+    async def get_token(self) -> bool | None:
+        """Retrieve a new token using the refresh token."""
+        if self.check_jwt():
+            return None
+        if self._options.refresh_token:
+            data = OAUTH_REFRESH_PARAMS
+            data["refresh_token"] = self._options.refresh_token
+            response = await self._async_http_request(
+                "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
+            )
+            if response is not None:
+                try:
+                    response_json = await response.json()
+                except ValueError as error:
+                    raise InvalidSensorDataError("Invalid devices data") from error
+
+                if response_json:
+                    self._options.token = response_json["access_token"]
+                    self._options.refresh_token = response_json["refresh_token"]
+                    return True
+
+        response = await self.do_auth()
+        if response:
+            self._options.token = response["access_token"]
+            self._options.refresh_token = response["refresh_token"]
+            return True
+
+        _LOGGER.error("Failed to refresh or reauthenticate")
+        return False
+
+    async def do_auth_step1(self, params: dict) -> tuple[str, str]:
+        """GET CSRF token from singlekey-id."""
+        response = await self._async_http_request(
+            "get",
+            OAUTH_DOMAIN
+            + OAUTH_LOGIN
+            + "?"
+            + urlencode(params)
+            + "&"
+            + urlencode(OAUTH_LOGIN_PARAMS),
+        )
+        return str(response.url), extract_verification_token(await response.text())
+
+    async def do_auth_step2(self, url: str, csrf_token: str) -> tuple[str, str]:
+        """POST username from singlekey-id."""
+        user_payload = {
+            "UserIdentifierInput.EmailInput.StringValue": self._options.username,
+            "__RequestVerificationToken": csrf_token,
+        }
+        response = await self._async_http_request("post", str(url), data=user_payload)
+        return str(response.url), extract_verification_token(await response.text())
+
+    async def do_auth_step3(self, url: str, csrf_token: str) -> ClientResponse:
+        """POST password from singlekey-id."""
+        # POST password
+        pass_payload = {
+            "Password": self._options.password,
+            "__RequestVerificationToken": csrf_token,
+        }
+        try:
+            return await self._session.post(
+                str(url),
+                data=pass_payload,
+                allow_redirects=False,
+            )
+        except ClientResponseError as error:
+            raise AuthFailedError("Authorization has failed") from error
+        except (TimeoutError, ClientConnectorError) as error:
+            raise NotRespondingError("Oauth endpoint is not responding") from error
+
+    async def do_auth(self) -> dict[Any, Any] | None:
+        """Singlekey-id login - get code."""
+        self._session.cookie_jar.clear_domain(OAUTH_DOMAIN[8:])
+
+        params = get_oauth_params()
+
+        response_url, csrf_token = await self.do_auth_step1(
+            {key: params[key] for key in ["state", "nonce", "code_challenge"]}
+        )
+
+        response_url, csrf_token = await self.do_auth_step2(
+            str(response_url), str(csrf_token)
+        )
+
+        response = await self.do_auth_step3(str(response_url), str(csrf_token))
+
+        try:
+            # First redirect
+            if response.headers.get("Location") is not None:
+                location: str = str(response.headers.get("Location"))
+                async with self._session.get(
+                    response.url.scheme + "://" + response.host + location,
+                    allow_redirects=False,
+                ) as respose:
+                    # Get and parse the Location header from the response
+                    location_query_params = parse_qs(
+                        urlparse(respose.headers.get("Location", "")).query
+                    )
+                    code = location_query_params.get("code", [None])[0]
+            else:
+                raise AuthFailedError("Authorization has failed")
+        except ClientResponseError as error:
+            raise AuthFailedError("Authorization has failed") from error
+        except (TimeoutError, ClientConnectorError) as error:
+            raise NotRespondingError("Oauth endpoint is not responding") from error
+
+        # get token
+        if code:
+            return await self.validate_auth(code, params["code_verifier"])
+        raise AuthFailedError("Authorization has failed")
+
+    async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
+        """Get access and refresh token from singlekey-id."""
+        response = await self._async_http_request(
+            "post",
+            OAUTH_DOMAIN + OAUTH_ENDPOINT,
+            "code="
+            + code
+            + "&"
+            + urlencode(OAUTH_PARAMS)
+            + "&code_verifier="
+            + code_verifier,
+            2,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise AuthFailedError("Authorization has failed") from error
+
+
+class HomeComRac(HomeComAlt):
+    """Main class to perform HomeCom Easy requests for device type rac."""
+
+    def __init__(self, session: ClientSession, options: Any, device_id: str) -> None:
+        """Initialize RAC device."""
+        super().__init__(session, options)
+        self.device_id = device_id
+        self.device_type = "rac"
+
     async def async_get_stardard(self, device_id: str) -> Any:
         """Get get standard functions."""
         response = await self._async_http_request(
@@ -277,35 +461,7 @@ class HomeComAlt:
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
-    async def async_get_time(self, device_id: str) -> Any:
-        """Get switch."""
-        response = await self._async_http_request(
-            "get",
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_GATEWAYS
-            + device_id
-            + BOSCHCOM_ENDPOINT_TIME,
-        )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
-
-    async def async_get_pv_list(self, device_id: str) -> Any:
-        """Get pv list."""
-        response = await self._async_http_request(
-            "get",
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_GATEWAYS
-            + device_id
-            + BOSCHCOM_ENDPOINT_PV_LIST,
-        )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
-
-    async def async_update(self, device_id: str) -> BHCDevice:
+    async def async_update(self, device_id: str) -> BHCDeviceRac:
         """Retrieve data from the device."""
         await self.get_token()
         if self._count == 0:
@@ -320,7 +476,7 @@ class HomeComAlt:
         stardard_functions = await self.async_get_stardard(device_id)
         advanced_functions = await self.async_get_advanced(device_id)
         switch_programs = await self.async_get_switch(device_id)
-        return BHCDevice(
+        return BHCDeviceRac(
             device=device_id,
             firmware=firmware,
             notifications=notifications,
@@ -528,149 +684,62 @@ class HomeComAlt:
             1,
         )
 
-    def check_jwt(self) -> bool:
-        """Check if token is expired."""
-        if not self._options.token:
-            return False
-        try:
-            exp = jwt.decode(
-                self._options.token, options={"verify_signature": False}
-            ).get("exp")
-            if exp is None:
-                _LOGGER.error("Token missing 'exp' claim")
-            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC)
-        except jwt.DecodeError as err:
-            _LOGGER.error("Invalid token: %s", err)
-            return False
 
-    async def get_token(self) -> bool | None:
-        """Retrieve a new token using the refresh token."""
-        if self.check_jwt():
-            return None
-        if self._options.refresh_token:
-            data = OAUTH_REFRESH_PARAMS
-            data["refresh_token"] = self._options.refresh_token
-            response = await self._async_http_request(
-                "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
-            )
-            if response is not None:
-                try:
-                    response_json = await response.json()
-                except ValueError as error:
-                    raise InvalidSensorDataError("Invalid devices data") from error
+class HomeComK40(HomeComAlt):
+    """Main class to perform HomeCom Easy requests for device type k40."""
 
-                if response_json:
-                    self._options.token = response_json["access_token"]
-                    self._options.refresh_token = response_json["refresh_token"]
-                    return True
+    def __init__(self, session: ClientSession, options: Any, device_id: str) -> None:
+        """Initialize K40 device."""
+        super().__init__(session, options)
+        self.device_id = device_id
+        self.device_type = "k40"
 
-        response = await self.do_auth()
-        if response:
-            self._options.token = response["access_token"]
-            self._options.refresh_token = response["refresh_token"]
-            return True
-
-        _LOGGER.error("Failed to refresh or reauthenticate")
-        return False
-
-    async def do_auth_step1(self, params: dict) -> tuple[str, str]:
-        """GET CSRF token from singlekey-id."""
+    async def async_get_dhw(self, device_id: str) -> Any:
+        """Get get standard functions."""
         response = await self._async_http_request(
             "get",
-            OAUTH_DOMAIN
-            + OAUTH_LOGIN
-            + "?"
-            + urlencode(params)
-            + "&"
-            + urlencode(OAUTH_LOGIN_PARAMS),
-        )
-        return str(response.url), extract_verification_token(await response.text())
-
-    async def do_auth_step2(self, url: str, csrf_token: str) -> tuple[str, str]:
-        """POST username from singlekey-id."""
-        user_payload = {
-            "UserIdentifierInput.EmailInput.StringValue": self._options.username,
-            "__RequestVerificationToken": csrf_token,
-        }
-        """Get firmware."""
-        response = await self._async_http_request("post", str(url), data=user_payload)
-        return str(response.url), extract_verification_token(await response.text())
-
-    async def do_auth_step3(self, url: str, csrf_token: str) -> ClientResponse:
-        """POST password from singlekey-id."""
-        # POST password
-        pass_payload = {
-            "Password": self._options.password,
-            "__RequestVerificationToken": csrf_token,
-        }
-        """Get firmware."""
-        try:
-            return await self._session.post(
-                str(url),
-                data=pass_payload,
-                allow_redirects=False,
-            )
-        except ClientResponseError as error:
-            raise AuthFailedError("Authorization has failed") from error
-        except (TimeoutError, ClientConnectorError) as error:
-            raise NotRespondingError("Oauth endpoint is not responding") from error
-
-    async def do_auth(self) -> dict[Any, Any] | None:
-        """Singlekey-id login - get code."""
-        self._session.cookie_jar.clear_domain(OAUTH_DOMAIN[8:])
-
-        params = get_oauth_params()
-
-        response_url, csrf_token = await self.do_auth_step1(
-            {key: params[key] for key in ["state", "nonce", "code_challenge"]}
-        )
-
-        response_url, csrf_token = await self.do_auth_step2(
-            str(response_url), str(csrf_token)
-        )
-
-        response = await self.do_auth_step3(str(response_url), str(csrf_token))
-
-        """Get firmware."""
-        try:
-            # First redirect
-            if response.headers.get("Location") is not None:
-                location: str = str(response.headers.get("Location"))
-                async with self._session.get(
-                    response.url.scheme + "://" + response.host + location,
-                    allow_redirects=False,
-                ) as respose:
-                    # Get and parse the Location header from the response
-                    location_query_params = parse_qs(
-                        urlparse(respose.headers.get("Location", "")).query
-                    )
-                    code = location_query_params.get("code", [None])[0]
-            else:
-                raise AuthFailedError("Authorization has failed")
-        except ClientResponseError as error:
-            raise AuthFailedError("Authorization has failed") from error
-        except (TimeoutError, ClientConnectorError) as error:
-            raise NotRespondingError("Oauth endpoint is not responding") from error
-
-        # get token
-        if code:
-            return await self.validate_auth(code, params["code_verifier"])
-        raise AuthFailedError("Authorization has failed")
-
-    async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
-        """Get access and refresh token from singlekey-id."""
-        response = await self._async_http_request(
-            "post",
-            OAUTH_DOMAIN + OAUTH_ENDPOINT,
-            "code="
-            + code
-            + "&"
-            + urlencode(OAUTH_PARAMS)
-            + "&code_verifier="
-            + code_verifier,
-            2,
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
         )
         try:
             return await response.json()
         except ValueError as error:
-            raise AuthFailedError("Authorization has failed") from error
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_heating(self, device_id: str) -> Any:
+        """Get advanced functions."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_update(self, device_id: str) -> BHCDeviceK40:
+        """Retrieve data from the device."""
+        await self.get_token()
+        if self._count == 0:
+            firmware = await self.async_get_firmware(device_id)
+            firmware = firmware.get("value", [])
+            notifications = await self.async_get_notifications(device_id)
+            notifications = notifications.get("value", [])
+        else:
+            firmware = {}
+            notifications = {}
+        self._count = (self._count + 1) % 72
+        dhw_circuits = await self.async_get_dhw(device_id)
+        heating_circuits = await self.async_get_heating(device_id)
+        return BHCDeviceK40(
+            device=device_id,
+            firmware=firmware,
+            notifications=notifications,
+            dhw_circuits=dhw_circuits["references"],
+            heating_circuits=heating_circuits["references"],
+        )

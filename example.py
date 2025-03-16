@@ -8,22 +8,25 @@ from aiohttp import ClientConnectorError, ClientError, ClientSession
 from homecom_alt import (
     ApiError,
     AuthFailedError,
-    BHCDevice,
+    BHCDeviceK40,
+    BHCDeviceRac,
     ConnectionOptions,
     HomeComAlt,
+    HomeComK40,
+    HomeComRac,
     InvalidSensorDataError,
 )
 
 logging.basicConfig(level=logging.DEBUG)
 
-USERNAME = "user"
+USERNAME = "username"
 PASSWORD = "password"
 
 
-def print_status(data: BHCDevice) -> None:
+def print_status(data: BHCDeviceRac) -> None:
     """Print device status."""
-    print("firmware: {data.firmware}")
-    print("notifications: {data.notifications}")
+    print(f"firmware: {data.firmware}")
+    print(f"notifications: {data.notifications}")
     for ref in data.stardard_functions:
         normalized_id = ref["id"].split("/", 2)[-1]
 
@@ -103,22 +106,36 @@ def print_status(data: BHCDevice) -> None:
                 pass
 
 
+def print_status_k40(data: BHCDeviceK40) -> None:
+    """Print device status."""
+    print(f"firmware: {data.firmware}")
+    print(f"notifications: {data.notifications}")
+    print(f"dhw: {data.dhw_circuits}")
+    print(f"heating: {data.heating_circuits}")
+
+
 async def main() -> None:
     """Run main function."""
     options = ConnectionOptions(username=USERNAME, password=PASSWORD)
+    device_classes: dict[str, type[HomeComAlt]] = {"rac": HomeComRac, "k40": HomeComK40}
 
     async with ClientSession() as websession:
-        bhc = await HomeComAlt.create(websession, options)
-
         try:
-            data: dict[str, BHCDevice] = {}
+            base_instance = await HomeComAlt.create(websession, options)
+            devices = await base_instance.async_get_devices()
+            devices = [
+                device_classes[device["deviceType"]](
+                    websession, options, device["deviceId"]
+                )
+                for device in await devices
+                if device["deviceType"] in device_classes
+            ]
             device_ids: list[str] = []
             # get devices synced with homecom easy
-            devices = await bhc.async_get_devices()
             # print each device discovered
-            for device in await devices:
-                print(f"Device={device['deviceId']}, type={device['deviceType']}")
-                device_ids.append(device["deviceId"])
+            for device in devices:
+                print(f"Device={device.device_id}, type={device.device_type}")
+                device_ids.append(device.device_id)
 
             while True:
                 device_id = input(
@@ -127,7 +144,11 @@ async def main() -> None:
                 if device_id not in device_ids:
                     print("device_id not in the list of devices")
                     continue
-                data: BHCDevice = await bhc.async_update(device_id)
+                bhc = next(
+                    (device for device in devices if device.device_id == device_id),
+                    None,
+                )
+                data = await bhc.async_update(device_id)
                 print_status(data)
                 break
 
@@ -156,8 +177,11 @@ async def main() -> None:
                 choice = input("Enter the number of your choice: ")
 
                 if choice == "1":
-                    data: BHCDevice = await bhc.async_update(device_id)
-                    print_status(data)
+                    data = await bhc.async_update(device_id)
+                    if bhc.device_type == "rac":
+                        print_status(data)
+                    if bhc.device_type == "k40":
+                        print_status_k40(data)
                 elif choice == "2":
                     time: dict = await bhc.async_get_time(device_id)
                     print(f"time: {time['value']}")
@@ -339,14 +363,17 @@ async def main() -> None:
                         print("Invalid program.")
                 elif choice == "18":
                     temp_device_id = input(
-                        "Enter the device you want to control: ",
-                        {", ".join(device_ids)},
+                        f"Enter the device you want to control: {', '.join(device_ids)} "
                     )
                     if temp_device_id not in device_ids:
                         print("device_id not in the list of devices")
                         continue
                     device_id = temp_device_id
-                    data: BHCDevice = await bhc.async_update(device_id)
+                    bhc = next(
+                        (device for device in devices if device.device_id == device_id),
+                        None,
+                    )
+                    data: BHCDeviceRac = await bhc.async_update(device_id)
                     print_status(data)
                 elif choice == "0":
                     print("Exiting, Goodbye!")
