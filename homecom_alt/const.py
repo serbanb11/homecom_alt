@@ -64,8 +64,31 @@ BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL: Final[str] = (
 BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
     "/resource/airConditioning/airPurificationMode"
 )
-BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
+BOSCHCOM_ENDPOINT_AWAY_MODE: Final[str] = "/resource/system/awayMode/enabled"
+BOSCHCOM_ENDPOINT_POWER_LIMITATION: Final[str] = (
+    "/resource/system/powerLimitation/active"
+)
+BOSCHCOM_ENDPOINT_HOLIDAY_MODE: Final[str] = "/resource/holidayMode/activeModes"
+BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/emon/totalConsumption"
+)
+BOSCHCOM_ENDPOINT_HS_TYPE: Final[str] = "/resource/heatSources/hs1/type"
+BOSCHCOM_ENDPOINT_HS_PUMP_TYPE: Final[str] = "/resource/heatSources/hs1/heatPumpType"
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
+BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
+BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
+BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE: Final[str] = "/heatCoolMode"
+BOSCHCOM_ENDPOINT_HC_HEATING_TYPE: Final[str] = "/heatingType"
+BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
+BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE: Final[str] = "/operationMode"
+BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP: Final[str] = "/actualTemp"
+BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL: Final[str] = "/temperatureLevels"
+BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL: Final[str] = "/currentTemperatureLevel"
+BOSCHCOM_ENDPOINT_DWH_CHARGE: Final[str] = "/charge"
+BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME: Final[str] = "/chargeRemainingTime"
+BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION: Final[str] = "/chargeDuration"
+BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT: Final[str] = "/singleChargeSetpoint"
+
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"

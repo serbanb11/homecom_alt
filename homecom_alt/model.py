@@ -37,5 +37,9 @@ class BHCDeviceK40:
     device: str | None
     firmware: list | None
     notifications: list | None
+    holiday_mode: list | None
+    away_mode: list | None
+    consumption: list | None
+    power_limitation: list | None
     dhw_circuits: list | None
     heating_circuits: list | None

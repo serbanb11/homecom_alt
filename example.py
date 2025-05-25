@@ -149,7 +149,10 @@ async def main() -> None:
                     None,
                 )
                 data = await bhc.async_update(device_id)
-                print_status(data)
+                if bhc.device_type == "rac":
+                    print_status(data)
+                if bhc.device_type == "k40":
+                    print_status_k40(data)
                 break
 
             allowed_bool = ["on", "off"]

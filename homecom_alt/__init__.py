@@ -34,17 +34,35 @@ from .const import (
     BOSCHCOM_ENDPOINT_ADVANCED,
     BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL,
     BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL,
+    BOSCHCOM_ENDPOINT_AWAY_MODE,
     BOSCHCOM_ENDPOINT_CONTROL,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+    BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_CHARGE,
+    BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION,
+    BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME,
+    BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
+    BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
+    BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
+    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
+    BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
+    BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
+    BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
+    BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
+    BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+    BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
+    BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
+    BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_PV_LIST,
     BOSCHCOM_ENDPOINT_STANDARD,
     BOSCHCOM_ENDPOINT_SWITCH,
@@ -695,7 +713,8 @@ class HomeComK40(HomeComAlt):
         self.device_type = "k40"
 
     async def async_get_dhw(self, device_id: str) -> Any:
-        """Get get standard functions."""
+        """Get hot water circuits."""
+        await self.get_token()
         response = await self._async_http_request(
             "get",
             BOSCHCOM_DOMAIN
@@ -708,8 +727,9 @@ class HomeComK40(HomeComAlt):
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
-    async def async_get_heating(self, device_id: str) -> Any:
-        """Get advanced functions."""
+    async def async_get_hc(self, device_id: str) -> Any:
+        """Get heating circuits."""
+        await self.get_token()
         response = await self._async_http_request(
             "get",
             BOSCHCOM_DOMAIN
@@ -722,24 +742,466 @@ class HomeComK40(HomeComAlt):
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
+    async def async_get_hc_control_type(self, device_id: str, hc_id: str) -> Any:
+        """Get hc control type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_hc_suwi_mode(self, device_id: str, hc_id: str) -> Any:
+        """Get hc summer winter mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_hc_suwi_mode(
+        self, device_id: str, hc_id: str, mode: str
+    ) -> None:
+        """Set summer winter mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_hc_heatcool_mode(self, device_id: str, hc_id: str) -> Any:
+        """Get hc control type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_hc_heatcool_mode(
+        self, device_id: str, hc_id: str, mode: str
+    ) -> None:
+        """Turn heat cool mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_hc_heating_type(self, device_id: str, hc_id: str) -> Any:
+        """Get hc heating type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_hs_total_consumption(self, device_id: str) -> Any:
+        """Get heat source total consumption."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_hs_type(self, device_id: str) -> Any:
+        """Get heat source type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_TYPE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_hs_pump_type(self, device_id: str) -> Any:
+        """Get heat source pump type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_away_mode(self, device_id: str) -> Any:
+        """Get away mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_AWAY_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_away_mode(self, device_id: str, mode: str) -> None:
+        """Set away mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_AWAY_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_holiday_mode(self, device_id: str) -> Any:
+        """Get holiday mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_holiday_mode(self, device_id: str, mode: str) -> None:
+        """Set holiday mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_power_limitation(self, device_id: str) -> Any:
+        """Get power limitation."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POWER_LIMITATION,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_operation_mode(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_dhw_operation_mode(
+        self, device_id: str, dhw_id: str, mode: str
+    ) -> None:
+        """Set dhw operation mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_dhw_actual_temp(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw actual temp."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_temp_level(
+        self, device_id: str, dhw_id: str, level: str
+    ) -> Any:
+        """Get dhw temp level."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL
+            + "/"
+            + level,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_current_temp_level(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """Get dhw current temp level."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_dhw_current_temp_level(
+        self, device_id: str, dhw_id: str, mode: str
+    ) -> None:
+        """Set dhw current temp level."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_dhw_charge(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw charge."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_charge_remaining_time(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """Get dhw charge remaining time."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_charge_duration(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw charge duration."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_dhw_charge_setpoint(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw charge setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
     async def async_update(self, device_id: str) -> BHCDeviceK40:
         """Retrieve data from the device."""
         await self.get_token()
         if self._count == 0:
-            firmware = await self.async_get_firmware(device_id)
-            firmware = firmware.get("value", [])
             notifications = await self.async_get_notifications(device_id)
             notifications = notifications.get("value", [])
         else:
-            firmware = {}
             notifications = {}
+        firmware = {}
         self._count = (self._count + 1) % 72
         dhw_circuits = await self.async_get_dhw(device_id)
-        heating_circuits = await self.async_get_heating(device_id)
+        references = dhw_circuits.get("references", [])
+        if not references:
+            raise InvalidSensorDataError("No DHW circuits found")
+        for ref in references:
+            dhw_id = ref["id"].split("/")[-1]
+            ref["operationMode"] = await self.async_get_dhw_operation_mode(
+                device_id, dhw_id
+            )
+            ref["actualTemp"] = await self.async_get_dhw_actual_temp(device_id, dhw_id)
+            ref[
+                "currentTemperatureLevel"
+            ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
+
+        heating_circuits = await self.async_get_hc(device_id)
+        references = heating_circuits.get("references", [])
+        if not references:
+            raise InvalidSensorDataError("No HC circuits found")
+        for ref in references:
+            hc_id = ref["id"].split("/")[-1]
+            ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(device_id, hc_id)
+            ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
+                device_id, hc_id
+            )
+
+        holiday_mode = await self.async_get_holiday_mode(device_id)
+        away_mode = await self.async_get_away_mode(device_id)
+        consumption = await self.async_get_hs_total_consumption(device_id)
+        power_limitation = await self.async_get_power_limitation(device_id)
+
         return BHCDeviceK40(
             device=device_id,
             firmware=firmware,
             notifications=notifications,
+            holiday_mode=holiday_mode,
+            away_mode=away_mode,
+            consumption=consumption,
+            power_limitation=power_limitation,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
         )
