@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime
 import hashlib
+from http import HTTPStatus
 import logging
 import math
 import os
 import random
 import re
-from datetime import UTC, datetime
-from http import HTTPStatus
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
-import jwt
 from aiohttp import (
     ClientConnectorError,
     ClientResponse,
     ClientResponseError,
     ClientSession,
 )
+import jwt
 from tenacity import (
     after_log,
     retry,
@@ -53,6 +53,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
     BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
     BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
+    BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
@@ -485,11 +486,10 @@ class HomeComRac(HomeComAlt):
         if self._count == 0:
             firmware = await self.async_get_firmware(device_id)
             firmware = firmware.get("value", [])
-            notifications = await self.async_get_notifications(device_id)
-            notifications = notifications.get("value", [])
         else:
             firmware = {}
-            notifications = {}
+
+        notifications = await self.async_get_notifications(device_id)
         self._count = (self._count + 1) % 72
         stardard_functions = await self.async_get_stardard(device_id)
         advanced_functions = await self.async_get_advanced(device_id)
@@ -497,7 +497,7 @@ class HomeComRac(HomeComAlt):
         return BHCDeviceRac(
             device=device_id,
             firmware=firmware,
-            notifications=notifications,
+            notifications=notifications.get("values", []),
             stardard_functions=stardard_functions["references"],
             advanced_functions=advanced_functions["references"],
             switch_programs=switch_programs["references"],
@@ -759,6 +759,42 @@ class HomeComK40(HomeComAlt):
             return await response.json()
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_get_hc_operation_mode(self, device_id: str, hc_id: str) -> Any:
+        """Get hc control type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
+        )
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_put_hc_operation_mode(
+        self, device_id: str, hc_id: str, mode: str
+    ) -> None:
+        """Set summer winter mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
+            {"value": mode},
+            1,
+        )
 
     async def async_get_hc_suwi_mode(self, device_id: str, hc_id: str) -> Any:
         """Get hc summer winter mode."""
@@ -1042,6 +1078,26 @@ class HomeComK40(HomeComAlt):
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
+    async def async_set_dhw_temp_level(
+        self, device_id: str, dhw_id: str, level: str, temp: str
+    ) -> None:
+        """Get dhw temp level."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL
+            + "/"
+            + level,
+            {"value": temp},
+            1,
+        )
+
     async def async_get_dhw_current_temp_level(
         self, device_id: str, dhw_id: str
     ) -> Any:
@@ -1098,6 +1154,24 @@ class HomeComK40(HomeComAlt):
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
+    async def async_set_dhw_charge(
+        self, device_id: str, dhw_id: str, value: str
+    ) -> None:
+        """Get dhw charge."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE,
+            {"value": value},
+            1,
+        )
+
     async def async_get_dhw_charge_remaining_time(
         self, device_id: str, dhw_id: str
     ) -> Any:
@@ -1117,6 +1191,24 @@ class HomeComK40(HomeComAlt):
             return await response.json()
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
+
+    async def async_set_dhw_charge_duration(
+        self, device_id: str, dhw_id: str, value: str
+    ) -> None:
+        """Get dhw charge remaining time."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION,
+            {"value": value},
+            1,
+        )
 
     async def async_get_dhw_charge_duration(self, device_id: str, dhw_id: str) -> Any:
         """Get dhw charge duration."""
@@ -1157,11 +1249,7 @@ class HomeComK40(HomeComAlt):
     async def async_update(self, device_id: str) -> BHCDeviceK40:
         """Retrieve data from the device."""
         await self.get_token()
-        if self._count == 0:
-            notifications = await self.async_get_notifications(device_id)
-            notifications = notifications.get("value", [])
-        else:
-            notifications = {}
+        notifications = await self.async_get_notifications(device_id)
         firmware = {}
         self._count = (self._count + 1) % 72
         dhw_circuits = await self.async_get_dhw(device_id)
@@ -1174,9 +1262,22 @@ class HomeComK40(HomeComAlt):
                 device_id, dhw_id
             )
             ref["actualTemp"] = await self.async_get_dhw_actual_temp(device_id, dhw_id)
+            ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
+            ref["chargeRemainingTime"] = await self.async_get_dhw_charge_remaining_time(
+                device_id, dhw_id
+            )
             ref[
                 "currentTemperatureLevel"
             ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
+            ref["singleChargeSetpoint"] = await self.async_get_dhw_charge_setpoint(
+                device_id, dhw_id
+            )
+            ref["tempLevel"] = {}
+            for value in ref["currentTemperatureLevel"]["allowedValues"]:
+                if value != "off":
+                    ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                        device_id, dhw_id, value
+                    )
 
         heating_circuits = await self.async_get_hc(device_id)
         references = heating_circuits.get("references", [])
@@ -1184,6 +1285,9 @@ class HomeComK40(HomeComAlt):
             raise InvalidSensorDataError("No HC circuits found")
         for ref in references:
             hc_id = ref["id"].split("/")[-1]
+            ref["operationMode"] = await self.async_get_hc_operation_mode(
+                device_id, hc_id
+            )
             ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(device_id, hc_id)
             ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
                 device_id, hc_id
@@ -1193,15 +1297,17 @@ class HomeComK40(HomeComAlt):
         away_mode = await self.async_get_away_mode(device_id)
         consumption = await self.async_get_hs_total_consumption(device_id)
         power_limitation = await self.async_get_power_limitation(device_id)
+        hs_pump_type = await self.async_get_hs_pump_type(device_id)
 
         return BHCDeviceK40(
             device=device_id,
             firmware=firmware,
-            notifications=notifications,
+            notifications=notifications.get("values", []),
             holiday_mode=holiday_mode,
             away_mode=away_mode,
             consumption=consumption,
             power_limitation=power_limitation,
+            hs_pump_type=hs_pump_type,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
         )
