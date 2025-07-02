@@ -2,6 +2,9 @@
 
 import asyncio
 import logging
+import sys
+import json
+from dataclasses import asdict
 
 from aiohttp import ClientConnectorError, ClientError, ClientSession
 
@@ -108,16 +111,17 @@ def print_status(data: BHCDeviceRac) -> None:
 
 def print_status_k40(data: BHCDeviceK40) -> None:
     """Print device status."""
-    print(f"firmware: {data.firmware}")
-    print(f"notifications: {data.notifications}")
-    print(f"dhw: {data.dhw_circuits}")
-    print(f"heating: {data.heating_circuits}")
+    print(json.dumps(asdict(data), indent=4))
 
 
 async def main() -> None:
     """Run main function."""
     options = ConnectionOptions(username=USERNAME, password=PASSWORD)
-    device_classes: dict[str, type[HomeComAlt]] = {"rac": HomeComRac, "k40": HomeComK40}
+    device_classes: dict[str, type[HomeComAlt]] = {
+        "rac": HomeComRac,
+        "k30": HomeComK40,
+        "k40": HomeComK40,
+    }
 
     async with ClientSession() as websession:
         try:
@@ -137,10 +141,17 @@ async def main() -> None:
                 print(f"Device={device.device_id}, type={device.device_type}")
                 device_ids.append(device.device_id)
 
+            if not devices:
+                print("No devices found")
+                sys.exit(0)
+
             while True:
-                device_id = input(
-                    f"Enter the device you want to control: {', '.join(device_ids)}"
-                )
+                if len(device_ids) == 1:
+                    device_id = device_ids[0]
+                else:
+                    device_id = input(
+                        f"Enter the device you want to control: {', '.join(device_ids)}"
+                    )
                 if device_id not in device_ids:
                     print("device_id not in the list of devices")
                     continue
@@ -151,7 +162,7 @@ async def main() -> None:
                 data = await bhc.async_update(device_id)
                 if bhc.device_type == "rac":
                     print_status(data)
-                if bhc.device_type == "k40":
+                if bhc.device_type in ("k30", "k40"):
                     print_status_k40(data)
                 break
 
@@ -183,7 +194,7 @@ async def main() -> None:
                     data = await bhc.async_update(device_id)
                     if bhc.device_type == "rac":
                         print_status(data)
-                    if bhc.device_type == "k40":
+                    if bhc.device_type in ("k30", "k40"):
                         print_status_k40(data)
                 elif choice == "2":
                     time: dict = await bhc.async_get_time(device_id)
@@ -241,7 +252,7 @@ async def main() -> None:
                     if temp > values["minValue"] and temp < values["maxValue"]:
                         await bhc.async_set_temperature(device_id, temp)
                     else:
-                        print("Invalid tempreture.")
+                        print("Invalid temperature.")
                 elif choice == "8":
                     values = next(
                         (
