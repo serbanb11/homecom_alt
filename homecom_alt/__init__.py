@@ -50,11 +50,13 @@ from .const import (
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
+    BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
     BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
     BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
     BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+    BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
@@ -198,6 +200,9 @@ class HomeComAlt:
                 and url == "https://singlekey-id.com/auth/connect/token"
             ):
                 return None
+            if error.status == HTTPStatus.NOT_FOUND.value:
+                # This url is not support for this type of device, just ignore it
+                return None
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
             ) from error
@@ -209,6 +214,15 @@ class HomeComAlt:
             raise ApiError(f"Invalid response from {url}: {resp.status}")
 
         return resp
+
+    @staticmethod
+    async def _to_data(response: Any) -> str:
+        if not response:
+            return None
+        try:
+            return await response.json()
+        except ValueError as error:
+            raise InvalidSensorDataError("Invalid devices data") from error
 
     @retry(
         retry=retry_if_exception_type(NotRespondingError),
@@ -237,10 +251,7 @@ class HomeComAlt:
             + device_id
             + BOSCHCOM_ENDPOINT_FIRMWARE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_notifications(self, device_id: str) -> Any:
         """Get notifications."""
@@ -251,10 +262,7 @@ class HomeComAlt:
             + device_id
             + BOSCHCOM_ENDPOINT_NOTIFICATIONS,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_pv_list(self, device_id: str) -> Any:
         """Get pv list."""
@@ -265,10 +273,7 @@ class HomeComAlt:
             + device_id
             + BOSCHCOM_ENDPOINT_PV_LIST,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_time(self, device_id: str) -> Any:
         """Get switch."""
@@ -279,10 +284,7 @@ class HomeComAlt:
             + device_id
             + BOSCHCOM_ENDPOINT_TIME,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     def check_jwt(self) -> bool:
         """Check if token is expired."""
@@ -447,10 +449,7 @@ class HomeComRac(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_STANDARD,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_advanced(self, device_id: str) -> Any:
         """Get advanced functions."""
@@ -461,10 +460,7 @@ class HomeComRac(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_ADVANCED,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_switch(self, device_id: str) -> Any:
         """Get switch."""
@@ -475,10 +471,7 @@ class HomeComRac(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_SWITCH,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_update(self, device_id: str) -> BHCDeviceRac:
         """Retrieve data from the device."""
@@ -722,10 +715,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hc(self, device_id: str) -> Any:
         """Get heating circuits."""
@@ -737,10 +727,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hc_control_type(self, device_id: str, hc_id: str) -> Any:
         """Get hc control type."""
@@ -755,10 +742,7 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hc_operation_mode(self, device_id: str, hc_id: str) -> Any:
         """Get hc control type."""
@@ -773,10 +757,7 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_hc_operation_mode(
         self, device_id: str, hc_id: str, mode: str
@@ -809,10 +790,7 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_hc_suwi_mode(
         self, device_id: str, hc_id: str, mode: str
@@ -845,10 +823,22 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
+
+    async def async_get_hc_room_temp(self, device_id: str, hc_id: str) -> Any:
+        """Get hc control type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
+        )
+        return await self._to_data(response)
 
     async def async_put_hc_heatcool_mode(
         self, device_id: str, hc_id: str, mode: str
@@ -881,10 +871,7 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hs_total_consumption(self, device_id: str) -> Any:
         """Get heat source total consumption."""
@@ -896,10 +883,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hs_type(self, device_id: str) -> Any:
         """Get heat source type."""
@@ -911,10 +895,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_HS_TYPE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_hs_pump_type(self, device_id: str) -> Any:
         """Get heat source pump type."""
@@ -926,10 +907,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_away_mode(self, device_id: str) -> Any:
         """Get away mode."""
@@ -941,10 +919,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_AWAY_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_away_mode(self, device_id: str, mode: str) -> None:
         """Set away mode."""
@@ -969,10 +944,7 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_holiday_mode(self, device_id: str, mode: str) -> None:
         """Set holiday mode."""
@@ -997,10 +969,19 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_POWER_LIMITATION,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
+
+    async def async_get_outdoor_temp(self, device_id: str) -> Any:
+        """Get power limitation."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
+        )
+        return await self._to_data(response)
 
     async def async_get_dhw_operation_mode(self, device_id: str, dhw_id: str) -> Any:
         """Get dhw operation mode."""
@@ -1015,10 +996,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_dhw_operation_mode(
         self, device_id: str, dhw_id: str, mode: str
@@ -1051,10 +1029,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_dhw_temp_level(
         self, device_id: str, dhw_id: str, level: str
@@ -1073,10 +1048,7 @@ class HomeComK40(HomeComAlt):
             + "/"
             + level,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_set_dhw_temp_level(
         self, device_id: str, dhw_id: str, level: str, temp: str
@@ -1113,10 +1085,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_put_dhw_current_temp_level(
         self, device_id: str, dhw_id: str, mode: str
@@ -1149,10 +1118,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_CHARGE,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_set_dhw_charge(
         self, device_id: str, dhw_id: str, value: str
@@ -1187,10 +1153,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_set_dhw_charge_duration(
         self, device_id: str, dhw_id: str, value: str
@@ -1223,10 +1186,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_get_dhw_charge_setpoint(self, device_id: str, dhw_id: str) -> Any:
         """Get dhw charge setpoint."""
@@ -1241,10 +1201,7 @@ class HomeComK40(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
         )
-        try:
-            return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        return await self._to_data(response)
 
     async def async_update(self, device_id: str) -> BHCDeviceK40:
         """Retrieve data from the device."""
@@ -1292,11 +1249,15 @@ class HomeComK40(HomeComAlt):
             ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
                 device_id, hc_id
             )
+            ref["roomTemp"] = await self.async_get_hc_room_temp(
+                device_id, hc_id
+            )
 
         holiday_mode = await self.async_get_holiday_mode(device_id)
         away_mode = await self.async_get_away_mode(device_id)
         consumption = await self.async_get_hs_total_consumption(device_id)
         power_limitation = await self.async_get_power_limitation(device_id)
+        outdoor_temp = await self.async_get_outdoor_temp(device_id)
         hs_pump_type = await self.async_get_hs_pump_type(device_id)
 
         return BHCDeviceK40(
@@ -1307,6 +1268,7 @@ class HomeComK40(HomeComAlt):
             away_mode=away_mode,
             consumption=consumption,
             power_limitation=power_limitation,
+            outdoor_temp=outdoor_temp,
             hs_pump_type=hs_pump_type,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],

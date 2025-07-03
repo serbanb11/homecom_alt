@@ -68,6 +68,9 @@ BOSCHCOM_ENDPOINT_AWAY_MODE: Final[str] = "/resource/system/awayMode/enabled"
 BOSCHCOM_ENDPOINT_POWER_LIMITATION: Final[str] = (
     "/resource/system/powerLimitation/active"
 )
+BOSCHCOM_ENDPOINT_OUTDOOR_TEMP: Final[str] = (
+    "/resource/system/sensors/temperatures/outdoor_t1"
+)
 BOSCHCOM_ENDPOINT_HOLIDAY_MODE: Final[str] = "/resource/holidayMode/activeModes"
 BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION: Final[str] = (
     "/resource/heatSources/emon/totalConsumption"
@@ -80,6 +83,7 @@ BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
 BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE: Final[str] = "/heatCoolMode"
 BOSCHCOM_ENDPOINT_HC_HEATING_TYPE: Final[str] = "/heatingType"
 BOSCHCOM_ENDPOINT_HC_OPERATION_MODE: Final[str] = "/operationMode"
+BOSCHCOM_ENDPOINT_HC_ROOM_TEMP: Final[str] = "/roomtemperature"
 BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
 BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE: Final[str] = "/operationMode"
 BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP: Final[str] = "/actualTemp"

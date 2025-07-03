@@ -41,6 +41,7 @@ class BHCDeviceK40:
     away_mode: list | None
     consumption: list | None
     power_limitation: list | None
+    outdoor_temp: list | None
     hs_pump_type: list | None
     dhw_circuits: list | None
     heating_circuits: list | None
