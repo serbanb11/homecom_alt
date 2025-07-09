@@ -48,6 +48,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
+    BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
@@ -57,6 +58,10 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
+    BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
@@ -250,6 +255,17 @@ class HomeComAlt:
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_FIRMWARE,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_info(self, device_id: str) -> Any:
+        """Get system info."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_INFO,
         )
         return await self._to_data(response)
 
@@ -840,6 +856,106 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_hc_actual_humidity(self, device_id: str, hc_id: str) -> Any:
+        """Get hc actual humidity."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hc_manual_room_setpoint(self, device_id: str, hc_id: str) -> Any:
+        """Get hc manual room setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hc_current_room_setpoint(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """Get hc current room setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_manual_room_setpoint(
+        self, device_id: str, hc_id: str, temp: str
+    ) -> None:
+        """Set hc manual room setpoint."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+            {"value": temp},
+            1,
+        )
+
+    async def async_get_hc_cooling_room_temp_setpoint(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """Get hc cooling room temperature setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_cooling_room_temp_setpoint(
+        self, device_id: str, hc_id: str, temp: str
+    ) -> None:
+        """Set hc cooling room temperature setpoint."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+            {"value": temp},
+            1,
+        )
+
     async def async_put_hc_heatcool_mode(
         self, device_id: str, hc_id: str, mode: str
     ) -> None:
@@ -1252,6 +1368,18 @@ class HomeComK40(HomeComAlt):
             ref["roomTemp"] = await self.async_get_hc_room_temp(
                 device_id, hc_id
             )
+            ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
+                device_id, hc_id
+            )
+            ref["manualRoomSetpoint"] = await self.async_get_hc_manual_room_setpoint(
+                device_id, hc_id
+            )
+            ref["currentRoomSetpoint"] = await self.async_get_hc_current_room_setpoint(
+                device_id, hc_id
+            )
+            ref[
+                "coolingRoomTempSetpoint"
+            ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
 
         holiday_mode = await self.async_get_holiday_mode(device_id)
         away_mode = await self.async_get_away_mode(device_id)
