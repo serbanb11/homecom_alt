@@ -3,24 +3,25 @@
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
 import hashlib
-from http import HTTPStatus
 import logging
 import math
 import os
 import random
 import re
-from typing import Any
+from collections.abc import Awaitable
+from datetime import UTC, datetime
+from http import HTTPStatus
+from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlparse
 
+import jwt
 from aiohttp import (
     ClientConnectorError,
     ClientResponse,
     ClientResponseError,
     ClientSession,
 )
-import jwt
 from tenacity import (
     after_log,
     retry,
@@ -126,7 +127,7 @@ def get_oauth_params() -> dict:
     return params
 
 
-def extract_verification_token(page_content: bytes) -> str | Any:
+def extract_verification_token(page_content: str) -> str | Any:
     """Extract the CSRF token from a page."""
     try:
         match = re.search(
@@ -174,7 +175,7 @@ class HomeComAlt:
         url: str,
         data: Any | None = None,
         req_type: int | None = None,
-    ) -> Any:
+    ) -> ClientResponse | None:
         """Retrieve data from the device."""
         headers = {
             "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
@@ -221,11 +222,11 @@ class HomeComAlt:
         return resp
 
     @staticmethod
-    async def _to_data(response: Any) -> str:
+    async def _to_data(response: ClientResponse | None) -> dict[str, Any] | None:
         if not response:
             return None
         try:
-            return await response.json()
+            return await cast(Awaitable[dict[str, Any]], response.json())
         except ValueError as error:
             raise InvalidSensorDataError("Invalid devices data") from error
 
@@ -242,6 +243,8 @@ class HomeComAlt:
             "get",
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS,
         )
+        if not response:
+            return None
         try:
             return response.json()
         except ValueError as error:
@@ -338,16 +341,16 @@ class HomeComAlt:
                     self._options.refresh_token = response_json["refresh_token"]
                     return True
 
-        response = await self.do_auth()
-        if response:
-            self._options.token = response["access_token"]
-            self._options.refresh_token = response["refresh_token"]
+        auth_response = await self.do_auth()
+        if auth_response:
+            self._options.token = auth_response["access_token"]
+            self._options.refresh_token = auth_response["refresh_token"]
             return True
 
         _LOGGER.error("Failed to refresh or reauthenticate")
         return False
 
-    async def do_auth_step1(self, params: dict) -> tuple[str, str]:
+    async def do_auth_step1(self, params: dict) -> tuple[str, str] | None:
         """GET CSRF token from singlekey-id."""
         response = await self._async_http_request(
             "get",
@@ -358,15 +361,19 @@ class HomeComAlt:
             + "&"
             + urlencode(OAUTH_LOGIN_PARAMS),
         )
+        if not response:
+            return None
         return str(response.url), extract_verification_token(await response.text())
 
-    async def do_auth_step2(self, url: str, csrf_token: str) -> tuple[str, str]:
+    async def do_auth_step2(self, url: str, csrf_token: str) -> tuple[str, str] | None:
         """POST username from singlekey-id."""
         user_payload = {
             "UserIdentifierInput.EmailInput.StringValue": self._options.username,
             "__RequestVerificationToken": csrf_token,
         }
         response = await self._async_http_request("post", str(url), data=user_payload)
+        if not response:
+            return None
         return str(response.url), extract_verification_token(await response.text())
 
     async def do_auth_step3(self, url: str, csrf_token: str) -> ClientResponse:
@@ -393,13 +400,18 @@ class HomeComAlt:
 
         params = get_oauth_params()
 
-        response_url, csrf_token = await self.do_auth_step1(
+        auth_step1 = await self.do_auth_step1(
             {key: params[key] for key in ["state", "nonce", "code_challenge"]}
         )
+        if not auth_step1:
+            return None
+        response_url, csrf_token = auth_step1
 
-        response_url, csrf_token = await self.do_auth_step2(
-            str(response_url), str(csrf_token)
-        )
+        auth_step2 = await self.do_auth_step2(str(response_url), str(csrf_token))
+        if not auth_step2:
+            return None
+
+        response_url, csrf_token = auth_step2
 
         response = await self.do_auth_step3(str(response_url), str(csrf_token))
 
@@ -441,6 +453,8 @@ class HomeComAlt:
             + code_verifier,
             2,
         )
+        if not response:
+            return None
         try:
             return await response.json()
         except ValueError as error:
@@ -1325,7 +1339,7 @@ class HomeComK40(HomeComAlt):
         """Retrieve data from the device."""
         await self.get_token()
         notifications = await self.async_get_notifications(device_id)
-        firmware = {}
+        firmware = await self.async_get_firmware(device_id)
         self._count = (self._count + 1) % 72
         dhw_circuits = await self.async_get_dhw(device_id)
         references = dhw_circuits.get("references", [])
