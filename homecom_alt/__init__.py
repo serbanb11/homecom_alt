@@ -196,8 +196,6 @@ class HomeComAlt:
                 timeout=DEFAULT_TIMEOUT,
                 headers=headers,
                 allow_redirects=True,
-                proxy="http://192.168.44.58:8080",
-                ssl=False,
             )
         except ClientResponseError as error:
             if error.status == HTTPStatus.UNAUTHORIZED.value:
