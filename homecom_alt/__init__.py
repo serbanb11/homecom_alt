@@ -48,20 +48,18 @@ from .const import (
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
-    BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
-    BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
+    BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
+    BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
     BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
-    BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
-    BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
-    BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
-    BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
-    BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
-    BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
+    BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
+    BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
+    BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
@@ -69,6 +67,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
+    BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_PV_LIST,
@@ -76,6 +75,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_SWITCH,
     BOSCHCOM_ENDPOINT_SWITCH_ENABLE,
     BOSCHCOM_ENDPOINT_SWITCH_PROGRAM,
+    BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_TEMP,
     BOSCHCOM_ENDPOINT_TIME,
     BOSCHCOM_ENDPOINT_TIMER,
@@ -196,6 +196,8 @@ class HomeComAlt:
                 timeout=DEFAULT_TIMEOUT,
                 headers=headers,
                 allow_redirects=True,
+                proxy="http://192.168.44.58:8080",
+                ssl=False,
             )
         except ClientResponseError as error:
             if error.status == HTTPStatus.UNAUTHORIZED.value:
@@ -207,7 +209,7 @@ class HomeComAlt:
                 return None
             if error.status == HTTPStatus.NOT_FOUND.value:
                 # This url is not support for this type of device, just ignore it
-                return None
+                return {}
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
             ) from error
@@ -871,7 +873,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_hc_manual_room_setpoint(self, device_id: str, hc_id: str) -> Any:
+    async def async_get_hc_manual_room_setpoint(
+        self, device_id: str, hc_id: str
+    ) -> Any:
         """Get hc manual room setpoint."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1346,7 +1350,8 @@ class HomeComK40(HomeComAlt):
                 device_id, dhw_id
             )
             ref["tempLevel"] = {}
-            for value in ref["currentTemperatureLevel"]["allowedValues"]:
+            ctl = ref.get("currentTemperatureLevel") or {}
+            for value in ctl.get("allowedValues", []):
                 if value != "off":
                     ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
                         device_id, dhw_id, value
@@ -1365,9 +1370,7 @@ class HomeComK40(HomeComAlt):
             ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
                 device_id, hc_id
             )
-            ref["roomTemp"] = await self.async_get_hc_room_temp(
-                device_id, hc_id
-            )
+            ref["roomTemp"] = await self.async_get_hc_room_temp(device_id, hc_id)
             ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
                 device_id, hc_id
             )
