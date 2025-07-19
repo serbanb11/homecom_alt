@@ -62,7 +62,11 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_MODULATION,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+    BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
+    BOSCHCOM_ENDPOINT_HS_STARTS,
+    BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_MODE,
@@ -1027,6 +1031,54 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_hs_starts(self, device_id: str) -> Any:
+        """Get heat source number of starts."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_STARTS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_return_temp(self, device_id: str) -> Any:
+        """Get heat source return temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_supply_temp(self, device_id: str) -> Any:
+        """Get heat source actual supply temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_modulation(self, device_id: str) -> Any:
+        """Get heat source actual modulation."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_MODULATION,
+        )
+        return await self._to_data(response)
+
     async def async_get_away_mode(self, device_id: str) -> Any:
         """Get away mode."""
         await self.get_token()
@@ -1321,6 +1373,15 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_action_universal_get(self, device_id: str, path: str) -> Any:
+        """Query any endpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS + device_id + path,
+        )
+        return await self._to_data(response)
+
     async def async_update(self, device_id: str) -> BHCDeviceK40:
         """Retrieve data from the device."""
         await self.get_token()
@@ -1382,12 +1443,27 @@ class HomeComK40(HomeComAlt):
                 "coolingRoomTempSetpoint"
             ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
 
+        heat_sources = {}
+        heat_sources["pumpType"] = await self.async_get_hs_pump_type(device_id) or {}
+        heat_sources["starts"] = await self.async_get_hs_starts(device_id) or {}
+        heat_sources["returnTemperature"] = (
+            await self.async_get_hs_return_temp(device_id) or {}
+        )
+        heat_sources["actualSupplyTemperature"] = (
+            await self.async_get_hs_supply_temp(device_id) or {}
+        )
+        heat_sources["actualModulation"] = (
+            await self.async_get_hs_modulation(device_id) or {}
+        )
+
+        heat_sources["consumption"] = (
+            await self.async_get_hs_total_consumption(device_id) or {}
+        )
+
         holiday_mode = await self.async_get_holiday_mode(device_id)
         away_mode = await self.async_get_away_mode(device_id)
-        consumption = await self.async_get_hs_total_consumption(device_id)
         power_limitation = await self.async_get_power_limitation(device_id)
         outdoor_temp = await self.async_get_outdoor_temp(device_id)
-        hs_pump_type = await self.async_get_hs_pump_type(device_id)
 
         return BHCDeviceK40(
             device=device_id,
@@ -1395,10 +1471,9 @@ class HomeComK40(HomeComAlt):
             notifications=notifications.get("values", []),
             holiday_mode=holiday_mode,
             away_mode=away_mode,
-            consumption=consumption,
             power_limitation=power_limitation,
             outdoor_temp=outdoor_temp,
-            hs_pump_type=hs_pump_type,
+            heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
         )

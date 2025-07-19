@@ -78,6 +78,12 @@ BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION: Final[str] = (
 )
 BOSCHCOM_ENDPOINT_HS_TYPE: Final[str] = "/resource/heatSources/hs1/type"
 BOSCHCOM_ENDPOINT_HS_PUMP_TYPE: Final[str] = "/resource/heatSources/hs1/heatPumpType"
+BOSCHCOM_ENDPOINT_HS_STARTS: Final[str] = "/resource/heatSources/hs1/numberOfStarts"
+BOSCHCOM_ENDPOINT_HS_RETURN_TEMP: Final[str] = "/resource/heatSources/returnTemperature"
+BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
+    "/resource/heatSources/actualSupplyTemperature"
+)
+BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModulation"
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
 BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
@@ -87,7 +93,9 @@ BOSCHCOM_ENDPOINT_HC_OPERATION_MODE: Final[str] = "/operationMode"
 BOSCHCOM_ENDPOINT_HC_ROOM_TEMP: Final[str] = "/roomtemperature"
 BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT: Final[str] = "/currentRoomSetpoint"
 BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT: Final[str] = "/manualRoomSetpoint"
-BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT: Final[str] = "/cooling/roomTempSetpoint"
+BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT: Final[str] = (
+    "/cooling/roomTempSetpoint"
+)
 BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY: Final[str] = "/actualHumidity"
 BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
 BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE: Final[str] = "/operationMode"

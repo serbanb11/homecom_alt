@@ -39,9 +39,8 @@ class BHCDeviceK40:
     notifications: list | None
     holiday_mode: list | None
     away_mode: list | None
-    consumption: list | None
     power_limitation: list | None
     outdoor_temp: list | None
-    hs_pump_type: list | None
+    heat_sources: list | None
     dhw_circuits: list | None
     heating_circuits: list | None
