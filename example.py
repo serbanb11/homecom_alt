@@ -1,9 +1,9 @@
 """An example of using homecom_alt package."""
 
 import asyncio
+import json
 import logging
 import sys
-import json
 from dataclasses import asdict
 
 from aiohttp import ClientConnectorError, ClientError, ClientSession
