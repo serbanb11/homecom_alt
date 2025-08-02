@@ -32,6 +32,9 @@ OAUTH_REFRESH_PARAMS: Final[dict[str, str]] = {
     "grant_type": "refresh_token",
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
 }
+OAUTH_BROWSER_VERIFIER: Final[str] = (
+    "AZbpLzMvXigq_jz7_riwNDV8BQYT30prXGDyRHdQMo0GYre3si9YJfG4b1U-QWERtOiX_9mCJE2SAPvJMeM2yA"
+)
 
 BOSCHCOM_DOMAIN: Final[str] = "https://pointt-api.bosch-thermotechnology.com"
 BOSCHCOM_ENDPOINT_GATEWAYS: Final[str] = "/pointt-api/api/v1/gateways/"

@@ -11,6 +11,7 @@ class ConnectionOptions:
     password: str | None = None
     token: str | None = None
     refresh_token: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         """Call after initialization."""

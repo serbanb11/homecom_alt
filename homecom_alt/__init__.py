@@ -85,6 +85,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_TIMER,
     DEFAULT_TIMEOUT,
     JSON,
+    OAUTH_BROWSER_VERIFIER,
     OAUTH_DOMAIN,
     OAUTH_ENDPOINT,
     OAUTH_LOGIN,
@@ -167,6 +168,8 @@ class HomeComAlt:
         """Initialize."""
         _LOGGER.debug("Initializing device")
 
+        if self._options.token and self._options.refresh_token:
+            return
         try:
             await self.get_token()
         except AuthFailedError as error:
@@ -342,7 +345,12 @@ class HomeComAlt:
                     self._options.refresh_token = response_json["refresh_token"]
                     return True
 
-        response = await self.do_auth()
+        if self._options.code:
+            response = await self.validate_auth(
+                self._options.code, OAUTH_BROWSER_VERIFIER
+            )
+        else:
+            response = await self.do_auth()
         if response:
             self._options.token = response["access_token"]
             self._options.refresh_token = response["refresh_token"]
@@ -430,7 +438,7 @@ class HomeComAlt:
         # get token
         if code:
             return await self.validate_auth(code, params["code_verifier"])
-        raise AuthFailedError("Authorization has failed")
+        return None
 
     async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
         """Get access and refresh token from singlekey-id."""
