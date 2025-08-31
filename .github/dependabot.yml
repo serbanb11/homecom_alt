@@ -4,6 +4,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    allow:
+      - dependency-type: "all"
+    ignore:
+      - dependency-name: "*" 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
