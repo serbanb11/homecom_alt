@@ -23,7 +23,7 @@ from homecom_alt import (
 logging.basicConfig(level=logging.DEBUG)
 
 USERNAME = "username"
-PASSWORD = "password"
+CODE = "code"
 
 
 def print_status(data: BHCDeviceRac) -> None:
@@ -116,7 +116,7 @@ def print_status_k40(data: BHCDeviceK40) -> None:
 
 async def main() -> None:
     """Run main function."""
-    options = ConnectionOptions(username=USERNAME, password=PASSWORD)
+    options = ConnectionOptions(username=USERNAME, code=CODE)
     device_classes: dict[str, type[HomeComAlt]] = {
         "rac": HomeComRac,
         "k30": HomeComK40,

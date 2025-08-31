@@ -125,7 +125,7 @@ ATTR_ECO_MODE: Final[str] = "ecoMode"
 ATTR_TIMERS_ON: Final[str] = "timersOn"
 ATTR_TIMERS_OFF: Final[str] = "timersOff"
 
-DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=5)
+DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=15)
 
 URLENCODED: Final[int] = 2
 JSON: Final[int] = 1
