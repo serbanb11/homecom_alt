@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
 import hashlib
-from http import HTTPStatus
 import logging
 import math
 import os
 import random
 import re
+from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode
 
+import jwt
 from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
     ClientSession,
 )
-import jwt
 from tenacity import (
     after_log,
     retry,
@@ -156,7 +156,7 @@ class HomeComAlt:
         self._auth_provider = auth_provider
 
     @property
-    def refresh_token(self) -> str:
+    def refresh_token(self) -> str | None:
         """Return the refresh token."""
         return self._options.refresh_token
 
@@ -166,7 +166,7 @@ class HomeComAlt:
         self._options.refresh_token = value
 
     @property
-    def token(self) -> str:
+    def token(self) -> str | None:
         """Return the access token."""
         return self._options.token
 
@@ -180,8 +180,7 @@ class HomeComAlt:
         cls, session: ClientSession, options: ConnectionOptions, auth_provider: bool
     ) -> HomeComAlt:
         """Create a new device instance."""
-        instance = cls(session, options, auth_provider)
-        return instance
+        return cls(session, options, auth_provider)
 
     async def _async_http_request(
         self,
@@ -236,7 +235,7 @@ class HomeComAlt:
         return resp
 
     @staticmethod
-    async def _to_data(response: Any) -> str:
+    async def _to_data(response: Any) -> Any | None:
         if not response:
             return None
         try:
@@ -363,6 +362,7 @@ class HomeComAlt:
                 self._options.refresh_token = response["refresh_token"]
                 return True
             raise AuthFailedError("Failed to refresh")
+        return None
 
     async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
         """Get access and refresh token from singlekey-id."""
@@ -403,14 +403,14 @@ class HomeComGeneric(HomeComAlt):
         self.device_id = device_id
         self.device_type = "generic"
 
-    async def async_update(self, device_id: str) -> BHCDeviceRac:
+    async def async_update(self, device_id: str) -> BHCDeviceGeneric:
         """Retrieve data from the device."""
         await self.get_token()
 
         notifications = await self.async_get_notifications(device_id)
         return BHCDeviceGeneric(
             device=device_id,
-            firmware={},
+            firmware=[],
             notifications=notifications.get("values", []),
         )
 
@@ -469,7 +469,7 @@ class HomeComRac(HomeComAlt):
         switch_programs = await self.async_get_switch(device_id)
         return BHCDeviceRac(
             device=device_id,
-            firmware={},
+            firmware=[],
             notifications=notifications.get("values", []),
             stardard_functions=stardard_functions["references"],
             advanced_functions=advanced_functions["references"],
@@ -1419,12 +1419,13 @@ class HomeComK40(HomeComAlt):
 
         return BHCDeviceK40(
             device=device_id,
+            firmware=[],
             notifications=notifications.get("values", []),
             holiday_mode=holiday_mode,
             away_mode=away_mode,
             power_limitation=power_limitation,
             outdoor_temp=outdoor_temp,
-            heat_sources=heat_sources,
+            heat_sources=list(heat_sources.values()) if heat_sources else [],
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
         )

@@ -1,9 +1,9 @@
 """An example of using homecom_alt package."""
 
 import asyncio
+import json
 import logging
 import sys
-import json
 from dataclasses import asdict
 
 from aiohttp import ClientConnectorError, ClientError, ClientSession
@@ -125,7 +125,9 @@ async def main() -> None:
 
     async with ClientSession() as websession:
         try:
-            base_instance = await HomeComAlt.create(websession, options)
+            base_instance = await HomeComAlt.create(
+                websession, options, auth_provider=True
+            )
             devices = await base_instance.async_get_devices()
             devices = [
                 device_classes[device["deviceType"]](
