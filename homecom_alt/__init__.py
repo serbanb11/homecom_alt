@@ -1425,7 +1425,7 @@ class HomeComK40(HomeComAlt):
             away_mode=away_mode,
             power_limitation=power_limitation,
             outdoor_temp=outdoor_temp,
-            heat_sources=list(heat_sources.values()) if heat_sources else [],
+            heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
         )
