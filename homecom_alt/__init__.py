@@ -103,7 +103,7 @@ from .exceptions import (
     InvalidSensorDataError,
     NotRespondingError,
 )
-from .model import BHCDeviceGeneric, BHCDeviceK40, BHCDeviceRac, ConnectionOptions
+from .model import BHCDeviceGeneric, BHCDeviceK40, BHCDeviceRac, BHCDeviceWddw2, ConnectionOptions
 
 _LOGGER = logging.getLogger(__name__)
 
