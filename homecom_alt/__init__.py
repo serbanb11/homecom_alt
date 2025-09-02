@@ -44,6 +44,12 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
     BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
+    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
+    BOSCHCOM_ENDPOINT_DWH_AIRBOX,
+    BOSCHCOM_ENDPOINT_DWH_FAN_SPEED,
+    BOSCHCOM_ENDPOINT_DWH_INLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
@@ -100,47 +106,6 @@ from .exceptions import (
 from .model import BHCDeviceGeneric, BHCDeviceK40, BHCDeviceRac, ConnectionOptions
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def get_nonce(length: int) -> str:
-    """Generate nonce."""
-    possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    return "".join(
-        possible[math.floor(random.uniform(0, 1) * len(possible))]
-        for _ in range(length)
-    )
-
-
-def get_oauth_params() -> dict:
-    """Generate code challenge and verifier."""
-    params = {}
-    params["nonce"] = get_nonce(22)
-    params["state"] = get_nonce(22)
-    code_verifier = (
-        base64.urlsafe_b64encode(os.urandom(64)).rstrip(b"=").decode("utf-8")
-    )
-    params["code_verifier"] = code_verifier
-    code_challenge_bytes = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-    code_challenge = (
-        base64.urlsafe_b64encode(code_challenge_bytes).rstrip(b"=").decode("utf-8")
-    )
-    params["code_challenge"] = code_challenge
-    return params
-
-
-def extract_verification_token(page_content: bytes) -> str | Any:
-    """Extract the CSRF token from a page."""
-    try:
-        match = re.search(
-            r'<input[^>]*name="__RequestVerificationToken"[^>]*value="([^"]+)"',
-            str(page_content),
-        )
-        if match:
-            return match.group(1)
-        raise ApiError("Invalid response in auth")
-    except re.PatternError as err:
-        raise ApiError(f"Invalid response in auth {err}") from err
-
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -1428,4 +1393,247 @@ class HomeComK40(HomeComAlt):
             heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
+        )
+
+
+class HomeComWddw2(HomeComAlt):
+    """Main class to perform HomeCom Easy requests for device type wddw2."""
+
+    def __init__(
+        self, session: ClientSession, options: Any, device_id: str, auth_provider: bool
+    ) -> None:
+        """Initialize wddw2 device."""
+        super().__init__(session, options, auth_provider)
+        self.device_id = device_id
+        self.device_type = "wddw2"
+
+    async def async_get_dhw(self, device_id: str) -> Any:
+        """Get hot water circuits."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_operation_mode(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_dhw_operation_mode(
+        self, device_id: str, dhw_id: str, mode: str
+    ) -> None:
+        """Set dhw operation mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_dhw_temp_level(
+        self, device_id: str, dhw_id: str, level: str
+    ) -> Any:
+        """Get dhw temp level."""
+        await self.get_token()
+        if level == "manual":
+            response = await self._async_http_request(
+                "get",
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+                + "/"
+                + dhw_id
+                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
+            )
+        else:
+            response = await self._async_http_request(
+                "get",
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+                + "/"
+                + dhw_id
+                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL
+                + "/"
+                + level,
+            )
+        return await self._to_data(response)
+
+    async def async_set_dhw_temp_level(
+        self, device_id: str, dhw_id: str, level: str, temp: str
+    ) -> None:
+        """Get dhw temp level."""
+        await self.get_token()
+        if level == "manual":
+            await self._async_http_request(
+                "put",
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+                + "/"
+                + dhw_id
+                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
+                {"value": temp},
+                1,
+            )
+        else:
+            await self._async_http_request(
+                "put",
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+                + "/"
+                + dhw_id
+                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL
+                + "/"
+                + level,
+                {"value": temp},
+                1,
+            )
+
+    async def async_get_dhw_airbox_temp(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_AIRBOX,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_fan_speed(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_FAN_SPEED,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_inlet_temp(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_INLET_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_outlet_temp(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_water_flow(self, device_id: str, dhw_id: str) -> Any:
+        """Get dhw operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_starts(self, device_id: str) -> Any:
+        """Get heat source number of starts."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_STARTS,
+        )
+        return await self._to_data(response)
+
+    async def async_update(self, device_id: str) -> BHCDeviceWddw2:
+        """Retrieve data from the device."""
+        await self.get_token()
+
+        notifications = await self.async_get_notifications(device_id)
+        dhw_circuits = await self.async_get_dhw(device_id)
+        references = dhw_circuits.get("references", [])
+        if not references:
+            raise InvalidSensorDataError("No DHW circuits found")
+        for ref in references:
+            dhw_id = ref["id"].split("/")[-1]
+            ref["operationMode"] = await self.async_get_dhw_operation_mode(
+                device_id, dhw_id
+            )
+            ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
+            ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
+            ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
+            ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
+            ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
+            ref["tempLevel"] = {}
+            ctl = ref.get("operationMode") or {}
+            for value in ctl.get("allowedValues", []):
+                if value != "off":
+                    ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                        device_id, dhw_id, value
+                    )
+
+        return BHCDeviceWddw2(
+            device=device_id,
+            firmware=[],
+            notifications=notifications.get("values", []),
+            dhw_circuits=dhw_circuits["references"],
         )

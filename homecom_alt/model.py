@@ -49,3 +49,13 @@ class BHCDeviceK40:
     heat_sources: list | None
     dhw_circuits: list | None
     heating_circuits: list | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceWddw2:
+    """Data class for wddw2 BHC device."""
+
+    device: str | None
+    firmware: list | None
+    notifications: list | None
+    dhw_circuits: list | None
