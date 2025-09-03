@@ -1623,7 +1623,7 @@ class HomeComWddw2(HomeComAlt):
             ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
             ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
             ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
-            ref["nbStarts"] = await self.async_get_hs_starts(device_id, dhw_id)
+            ref["nbStarts"] = await self.async_get_hs_starts(device_id)
             ref["tempLevel"] = {}
             ctl = ref.get("operationMode") or {}
             for value in ctl.get("allowedValues", []):
