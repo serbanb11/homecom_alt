@@ -1615,22 +1615,23 @@ class HomeComWddw2(HomeComAlt):
             raise InvalidSensorDataError("No DHW circuits found")
         for ref in references:
             dhw_id = ref["id"].split("/")[-1]
-            ref["operationMode"] = await self.async_get_dhw_operation_mode(
-                device_id, dhw_id
-            )
-            ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
-            ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
-            ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
-            ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
-            ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
-            ref["nbStarts"] = await self.async_get_hs_starts(device_id)
-            ref["tempLevel"] = {}
-            ctl = ref.get("operationMode") or {}
-            for value in ctl.get("allowedValues", []):
-                if value != "off":
-                    ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
-                        device_id, dhw_id, value
-                    )
+            if re.fullmatch(r"dhw\d", dhw_id):
+                ref["operationMode"] = await self.async_get_dhw_operation_mode(
+                    device_id, dhw_id
+                )
+                ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
+                ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
+                ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
+                ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
+                ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
+                ref["nbStarts"] = await self.async_get_hs_starts(device_id)
+                ref["tempLevel"] = {}
+                ctl = ref.get("operationMode") or {}
+                for value in ctl.get("allowedValues", []):
+                    if value != "off":
+                        ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                            device_id, dhw_id, value
+                        )
 
         return BHCDeviceWddw2(
             device=device_id,
