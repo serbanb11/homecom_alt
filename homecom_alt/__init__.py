@@ -1488,34 +1488,18 @@ class HomeComWddw2(HomeComAlt):
     ) -> None:
         """Get dhw temp level."""
         await self.get_token()
-        if level == "manual":
-            await self._async_http_request(
-                "put",
-                BOSCHCOM_DOMAIN
-                + BOSCHCOM_ENDPOINT_GATEWAYS
-                + device_id
-                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
-                + "/"
-                + dhw_id
-                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
-                {"value": temp},
-                1,
-            )
-        else:
-            await self._async_http_request(
-                "put",
-                BOSCHCOM_DOMAIN
-                + BOSCHCOM_ENDPOINT_GATEWAYS
-                + device_id
-                + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
-                + "/"
-                + dhw_id
-                + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL
-                + "/"
-                + level,
-                {"value": temp},
-                1,
-            )
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
+            {"value": temp},
+            1,
+        )
 
     async def async_get_dhw_airbox_temp(self, device_id: str, dhw_id: str) -> Any:
         """Get dhw operation mode."""
