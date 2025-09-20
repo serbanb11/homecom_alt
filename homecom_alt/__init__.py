@@ -1497,7 +1497,7 @@ class HomeComWddw2(HomeComAlt):
             + "/"
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
-            {"value": temp},
+            {"value": round(temp, 1)},
             1,
         )
 
