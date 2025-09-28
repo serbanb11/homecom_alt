@@ -372,11 +372,10 @@ class HomeComGeneric(HomeComAlt):
         """Retrieve data from the device."""
         await self.get_token()
 
-        notifications = await self.async_get_notifications(device_id)
         return BHCDeviceGeneric(
             device=device_id,
             firmware=[],
-            notifications=notifications.get("values", []),
+            notifications=[],
         )
 
 
