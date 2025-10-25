@@ -67,7 +67,9 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP.
     BOSCHCOM_ENDPOINT_HS_MODULATION,
+    BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
     BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
     BOSCHCOM_ENDPOINT_HS_STARTS,
@@ -1005,6 +1007,30 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_hs_brine_inflow_temp(self, device_id: str) -> Any:
+        """Get brine circuit collector inflow temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_brine_outflow_temp(self, device_id: str) -> Any:
+        """Get brine circuit collector outflow temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
+        )
+        return await self._to_data(response)
+
     async def async_get_away_mode(self, device_id: str) -> Any:
         """Get away mode."""
         await self.get_token()
@@ -1306,58 +1332,60 @@ class HomeComK40(HomeComAlt):
         notifications = await self.async_get_notifications(device_id)
         dhw_circuits = await self.async_get_dhw(device_id)
         references = dhw_circuits.get("references", [])
-        if not references:
-            raise InvalidSensorDataError("No DHW circuits found")
-        for ref in references:
-            dhw_id = ref["id"].split("/")[-1]
-            ref["operationMode"] = await self.async_get_dhw_operation_mode(
-                device_id, dhw_id
-            )
-            ref["actualTemp"] = await self.async_get_dhw_actual_temp(device_id, dhw_id)
-            ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
-            ref["chargeRemainingTime"] = await self.async_get_dhw_charge_remaining_time(
-                device_id, dhw_id
-            )
-            ref[
-                "currentTemperatureLevel"
-            ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
-            ref["singleChargeSetpoint"] = await self.async_get_dhw_charge_setpoint(
-                device_id, dhw_id
-            )
-            ref["tempLevel"] = {}
-            ctl = ref.get("currentTemperatureLevel") or {}
-            for value in ctl.get("allowedValues", []):
-                if value != "off":
-                    ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
-                        device_id, dhw_id, value
-                    )
+        if references:
+            for ref in references:
+                dhw_id = ref["id"].split("/")[-1]
+                ref["operationMode"] = await self.async_get_dhw_operation_mode(
+                    device_id, dhw_id
+                )
+                ref["actualTemp"] = await self.async_get_dhw_actual_temp(device_id, dhw_id)
+                ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
+                ref["chargeRemainingTime"] = await self.async_get_dhw_charge_remaining_time(
+                    device_id, dhw_id
+                )
+                ref[
+                    "currentTemperatureLevel"
+                ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
+                ref["singleChargeSetpoint"] = await self.async_get_dhw_charge_setpoint(
+                    device_id, dhw_id
+                )
+                ref["tempLevel"] = {}
+                ctl = ref.get("currentTemperatureLevel") or {}
+                for value in ctl.get("allowedValues", []):
+                    if value != "off":
+                        ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                            device_id, dhw_id, value
+                        )
+        else:
+            dhw_circuits["references"] = {}
 
         heating_circuits = await self.async_get_hc(device_id)
         references = heating_circuits.get("references", [])
-        if not references:
-            raise InvalidSensorDataError("No HC circuits found")
-        for ref in references:
-            hc_id = ref["id"].split("/")[-1]
-            ref["operationMode"] = await self.async_get_hc_operation_mode(
-                device_id, hc_id
-            )
-            ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(device_id, hc_id)
-            ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
-                device_id, hc_id
-            )
-            ref["roomTemp"] = await self.async_get_hc_room_temp(device_id, hc_id)
-            ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
-                device_id, hc_id
-            )
-            ref["manualRoomSetpoint"] = await self.async_get_hc_manual_room_setpoint(
-                device_id, hc_id
-            )
-            ref["currentRoomSetpoint"] = await self.async_get_hc_current_room_setpoint(
-                device_id, hc_id
-            )
-            ref[
-                "coolingRoomTempSetpoint"
-            ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
+        if references:
+            for ref in references:
+                hc_id = ref["id"].split("/")[-1]
+                ref["operationMode"] = await self.async_get_hc_operation_mode(
+                    device_id, hc_id
+                )
+                ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(device_id, hc_id)
+                ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
+                    device_id, hc_id
+                )
+                ref["roomTemp"] = await self.async_get_hc_room_temp(device_id, hc_id)
+                ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
+                    device_id, hc_id
+                )
+                ref["manualRoomSetpoint"] = await self.async_get_hc_manual_room_setpoint(
+                    device_id, hc_id
+                )
+                ref["currentRoomSetpoint"] = await self.async_get_hc_current_room_setpoint(
+                    device_id, hc_id
+                )
+                ref[
+                    "coolingRoomTempSetpoint"
+                ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
+        else:
+            heating_circuits["references"] = {}
 
         heat_sources = {}
         heat_sources["pumpType"] = await self.async_get_hs_pump_type(device_id) or {}
@@ -1371,7 +1399,12 @@ class HomeComK40(HomeComAlt):
         heat_sources["actualModulation"] = (
             await self.async_get_hs_modulation(device_id) or {}
         )
-
+        heat_sources["collectorInflowTemp"] = (
+            await self.async_get_hs_brine_inflow_temp(device_id) or {}
+        )
+        heat_sources["collectorOutflowTemp"] = (
+            await self.async_get_hs_brine_outflow_temp(device_id) or {}
+        )
         heat_sources["consumption"] = (
             await self.async_get_hs_total_consumption(device_id) or {}
         )
@@ -1594,27 +1627,28 @@ class HomeComWddw2(HomeComAlt):
         notifications = await self.async_get_notifications(device_id)
         dhw_circuits = await self.async_get_dhw(device_id)
         references = dhw_circuits.get("references", [])
-        if not references:
-            raise InvalidSensorDataError("No DHW circuits found")
-        for ref in references:
-            dhw_id = ref["id"].split("/")[-1]
-            if re.fullmatch(r"dhw\d", dhw_id):
-                ref["operationMode"] = await self.async_get_dhw_operation_mode(
-                    device_id, dhw_id
-                )
-                ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
-                ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
-                ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
-                ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
-                ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
-                ref["nbStarts"] = await self.async_get_hs_starts(device_id)
-                ref["tempLevel"] = {}
-                ctl = ref.get("operationMode") or {}
-                for value in ctl.get("allowedValues", []):
-                    if value != "off":
-                        ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
-                            device_id, dhw_id, value
-                        )
+        if references:
+            for ref in references:
+                dhw_id = ref["id"].split("/")[-1]
+                if re.fullmatch(r"dhw\d", dhw_id):
+                    ref["operationMode"] = await self.async_get_dhw_operation_mode(
+                        device_id, dhw_id
+                    )
+                    ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
+                    ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
+                    ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
+                    ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
+                    ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
+                    ref["nbStarts"] = await self.async_get_hs_starts(device_id)
+                    ref["tempLevel"] = {}
+                    ctl = ref.get("operationMode") or {}
+                    for value in ctl.get("allowedValues", []):
+                        if value != "off":
+                            ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                                device_id, dhw_id, value
+                            )
+        else:
+            dhw_circuits["references"] = {}
 
         return BHCDeviceWddw2(
             device=device_id,

@@ -82,6 +82,8 @@ BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION: Final[str] = (
 BOSCHCOM_ENDPOINT_HS_TYPE: Final[str] = "/resource/heatSources/hs1/type"
 BOSCHCOM_ENDPOINT_HS_PUMP_TYPE: Final[str] = "/resource/heatSources/hs1/heatPumpType"
 BOSCHCOM_ENDPOINT_HS_STARTS: Final[str] = "/resource/heatSources/hs1/numberOfStarts"
+BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorInflowTemp"
+BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorOutflowTemp"
 BOSCHCOM_ENDPOINT_HS_RETURN_TEMP: Final[str] = "/resource/heatSources/returnTemperature"
 BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
     "/resource/heatSources/actualSupplyTemperature"
