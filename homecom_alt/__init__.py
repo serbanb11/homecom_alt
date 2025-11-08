@@ -67,6 +67,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
     BOSCHCOM_ENDPOINT_HS_MODULATION,
     BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
@@ -76,6 +77,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_TYPE,
+    BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
@@ -293,7 +295,7 @@ class HomeComAlt:
             ).get("exp")
             if exp is None:
                 _LOGGER.error("Token missing 'exp' claim")
-            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC)
+            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC) - timedelta(minutes=5)
         except jwt.DecodeError as err:
             _LOGGER.error("Invalid token: %s", err)
             return False
@@ -1031,6 +1033,30 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_hs_heat_demand(self, device_id: str) -> Any:
+        """Get actual heat deman."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_working_time(self, device_id: str) -> Any:
+        """Get total working time."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
+        )
+        return await self._to_data(response)
+
     async def async_get_away_mode(self, device_id: str) -> Any:
         """Get away mode."""
         await self.get_token()
@@ -1404,6 +1430,12 @@ class HomeComK40(HomeComAlt):
         )
         heat_sources["collectorOutflowTemp"] = (
             await self.async_get_hs_brine_outflow_temp(device_id) or {}
+        )
+        heat_sources["actualHeatDemand"] = (
+            await self.async_get_hs_heat_demand(device_id) or {}
+        )
+        heat_sources["totalWorkingTime"] = (
+            await self.async_get_hs_working_time(device_id) or {}
         )
         heat_sources["consumption"] = (
             await self.async_get_hs_total_consumption(device_id) or {}

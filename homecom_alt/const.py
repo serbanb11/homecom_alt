@@ -85,6 +85,8 @@ BOSCHCOM_ENDPOINT_HS_STARTS: Final[str] = "/resource/heatSources/hs1/numberOfSta
 BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorInflowTemp"
 BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorOutflowTemp"
 BOSCHCOM_ENDPOINT_HS_RETURN_TEMP: Final[str] = "/resource/heatSources/returnTemperature"
+BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND: Final[str] = "/resource/heatSources/actualHeatDemand"
+BOSCHCOM_ENDPOINT_HS_WORKING_TIME: Final[str] = "/resource/heatSources/workingTime/totalSystem"
 BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
     "/resource/heatSources/actualSupplyTemperature"
 )
