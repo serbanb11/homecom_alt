@@ -92,6 +92,21 @@ from .const import (
     BOSCHCOM_ENDPOINT_TEMP,
     BOSCHCOM_ENDPOINT_TIME,
     BOSCHCOM_ENDPOINT_TIMER,
+    BOSCHCOM_ENDPOINT_VENTILATION,
+    BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+    BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_FAN,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
+    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
     DEFAULT_TIMEOUT,
     JSON,
     OAUTH_BROWSER_VERIFIER,
@@ -1351,7 +1366,297 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_update(self, device_id: str) -> BHCDeviceK40:
+    async def async_get_ventilation_exhaustfanlevel(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation exhaust fan level."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_FAN,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_humidity(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation max relative humidity."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_quality(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation max indoor air quality."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_mode(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_set_ventilation_mode(self, device_id: str, zone_id: str, value: str) -> Any:
+        """Set ventilation operation mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_ventilation_exhaust_temp(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation exhaust temp."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_extract_temp(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation extract temp."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_internal_quality(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation internal quality."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_internal_humidity(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation internal humidity."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_outdoor_temp(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation outdoor temp."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_supply_temp(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation supply temp."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_summer_enable(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation summer enable."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+        )
+        return await self._to_data(response)
+
+    async def async_set_ventilation_summer_enable(self, device_id: str, zone_id: str, value: str) -> Any:
+        """Set ventilation summer enable."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_ventilation_summer_duration(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation summer duration."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
+        )
+        return await self._to_data(response)
+
+    async def async_set_ventilation_summer_duration(self, device_id: str, zone_id: str, value: str) -> Any:
+        """Set ventilation summer duration."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_ventilation_demand_quality(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation demand indoor quality."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
+        )
+        return await self._to_data(response)
+
+    async def async_set_ventilation_demand_quality(self, device_id: str, zone_id: str, value: str) -> Any:
+        """Set ventilation demand indoor quality."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_ventilation_demand_humidity(self, device_id: str, zone_id: str) -> Any:
+        """Get ventilation demand humidity."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+        )
+        return await self._to_data(response)
+
+    async def async_set_ventilation_demand_humidity(self, device_id: str, zone_id: str, value: str) -> Any:
+        """Set ventilation demand humidity."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+            {"value": value},
+            1,
+        )
+
+    async def async_update(self, device_id: str, ventilation_enabled: int) -> BHCDeviceK40:
         """Retrieve data from the device."""
         await self.get_token()
 
@@ -1446,6 +1751,24 @@ class HomeComK40(HomeComAlt):
         power_limitation = await self.async_get_power_limitation(device_id)
         outdoor_temp = await self.async_get_outdoor_temp(device_id)
 
+        ventilation = {}
+        if ventilation_enabled:
+            zone_id = "zone1"
+            ventilation["exhaustFanLevel"] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
+            ventilation["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(device_id, zone_id)
+            ventilation["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(device_id, zone_id)
+            ventilation["operationMode"] = await self.async_get_ventilation_mode(device_id, zone_id)
+            ventilation["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(device_id, zone_id)
+            ventilation["extractTemp"] = await self.async_get_ventilation_extract_temp(device_id, zone_id)
+            ventilation["internalAirQuality"] = await self.async_get_ventilation_internal_quality(device_id, zone_id)
+            ventilation["internalHumidity"] = await self.async_get_ventilation_internal_humidity(device_id, zone_id)
+            ventilation["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(device_id, zone_id)
+            ventilation["supplyTemp"] = await self.async_get_ventilation_supply_temp(device_id, zone_id)
+            ventilation["summerBypassEnable"] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
+            ventilation["summerBypassDuration"] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
+            ventilation["demandindoorAirQuality"] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
+            ventilation["demandrelativeHumidity"] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
+
         return BHCDeviceK40(
             device=device_id,
             firmware=[],
@@ -1457,6 +1780,7 @@ class HomeComK40(HomeComAlt):
             heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
+            ventilation=ventilation,
         )
 
 

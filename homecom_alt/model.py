@@ -49,6 +49,7 @@ class BHCDeviceK40:
     heat_sources: list | None
     dhw_circuits: list | None
     heating_circuits: list | None
+    ventilation: list | None
 
 
 @dataclass(frozen=True)
