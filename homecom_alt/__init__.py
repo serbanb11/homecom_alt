@@ -1366,6 +1366,18 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_ventilation_zones(self, device_id: str) -> Any:
+        """Get ventilation zones."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION,
+        )
+        return await self._to_data(response)
+
     async def async_get_ventilation_exhaustfanlevel(self, device_id: str, zone_id: str) -> Any:
         """Get ventilation exhaust fan level."""
         await self.get_token()
@@ -1656,7 +1668,7 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_update(self, device_id: str, ventilation_enabled: int) -> BHCDeviceK40:
+    async def async_update(self, device_id: str) -> BHCDeviceK40:
         """Retrieve data from the device."""
         await self.get_token()
 
@@ -1751,23 +1763,27 @@ class HomeComK40(HomeComAlt):
         power_limitation = await self.async_get_power_limitation(device_id)
         outdoor_temp = await self.async_get_outdoor_temp(device_id)
 
-        ventilation = {}
-        if ventilation_enabled:
-            zone_id = "zone1"
-            ventilation["exhaustFanLevel"] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
-            ventilation["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(device_id, zone_id)
-            ventilation["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(device_id, zone_id)
-            ventilation["operationMode"] = await self.async_get_ventilation_mode(device_id, zone_id)
-            ventilation["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(device_id, zone_id)
-            ventilation["extractTemp"] = await self.async_get_ventilation_extract_temp(device_id, zone_id)
-            ventilation["internalAirQuality"] = await self.async_get_ventilation_internal_quality(device_id, zone_id)
-            ventilation["internalHumidity"] = await self.async_get_ventilation_internal_humidity(device_id, zone_id)
-            ventilation["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(device_id, zone_id)
-            ventilation["supplyTemp"] = await self.async_get_ventilation_supply_temp(device_id, zone_id)
-            ventilation["summerBypassEnable"] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
-            ventilation["summerBypassDuration"] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
-            ventilation["demandindoorAirQuality"] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
-            ventilation["demandrelativeHumidity"] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
+        ventialtion = await self.async_get_ventilation_zones(device_id)
+        ventialtion_references = ventialtion.get("references", [])
+        if ventialtion_references:
+            for ref in ventialtion_references:
+                zone_id = ref["id"].split("/")[-1]
+                ref["exhaustFanLevel"] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
+                ref["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(device_id, zone_id)
+                ref["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(device_id, zone_id)
+                ref["operationMode"] = await self.async_get_ventilation_mode(device_id, zone_id)
+                ref["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(device_id, zone_id)
+                ref["extractTemp"] = await self.async_get_ventilation_extract_temp(device_id, zone_id)
+                ref["internalAirQuality"] = await self.async_get_ventilation_internal_quality(device_id, zone_id)
+                ref["internalHumidity"] = await self.async_get_ventilation_internal_humidity(device_id, zone_id)
+                ref["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(device_id, zone_id)
+                ref["supplyTemp"] = await self.async_get_ventilation_supply_temp(device_id, zone_id)
+                ref["summerBypassEnable"] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
+                ref["summerBypassDuration"] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
+                ref["demandindoorAirQuality"] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
+                ref["demandrelativeHumidity"] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
+        else:
+            ventialtion_references["references"] = {}
 
         return BHCDeviceK40(
             device=device_id,
@@ -1780,7 +1796,7 @@ class HomeComK40(HomeComAlt):
             heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
-            ventilation=ventilation,
+            ventilation=ventialtion_references,
         )
 
 
