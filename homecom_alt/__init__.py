@@ -1763,10 +1763,10 @@ class HomeComK40(HomeComAlt):
         power_limitation = await self.async_get_power_limitation(device_id)
         outdoor_temp = await self.async_get_outdoor_temp(device_id)
 
-        ventialtion = await self.async_get_ventilation_zones(device_id)
-        ventialtion_references = ventialtion.get("references", [])
-        if ventialtion_references:
-            for ref in ventialtion_references:
+        ventilation = await self.async_get_ventilation_zones(device_id)
+        ventilation_references = ventilation.get("references", [])
+        if ventilation_references:
+            for ref in ventilation_references:
                 zone_id = ref["id"].split("/")[-1]
                 ref["exhaustFanLevel"] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
                 ref["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(device_id, zone_id)
@@ -1783,7 +1783,7 @@ class HomeComK40(HomeComAlt):
                 ref["demandindoorAirQuality"] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
                 ref["demandrelativeHumidity"] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
         else:
-            ventialtion_references["references"] = {}
+            ventilation_references = {}
 
         return BHCDeviceK40(
             device=device_id,
@@ -1796,7 +1796,7 @@ class HomeComK40(HomeComAlt):
             heat_sources=heat_sources,
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
-            ventilation=ventialtion_references,
+            ventilation=ventilation_references,
         )
 
 
