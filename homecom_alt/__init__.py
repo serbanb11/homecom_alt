@@ -197,7 +197,9 @@ class HomeComAlt:
         retries: int = 3
     ) -> Any:
         """Retrieve data from the device."""
-        headers = {"Authorization": f"Bearer {self._options.get('token', '')}"}
+        headers = {
+            "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
+        }
         # JSON request
         if req_type == JSON:
             headers["Content-Type"] = "application/json; charset=UTF-8"
