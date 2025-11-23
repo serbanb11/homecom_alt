@@ -127,6 +127,26 @@ from .model import BHCDeviceGeneric, BHCDeviceK40, BHCDeviceRac, BHCDeviceWddw2,
 
 _LOGGER = logging.getLogger(__name__)
 
+async def backoff_retry(
+    coro_factory: Callable[[], Any],
+    *,
+    retries: int = 3,
+    base_delay: float = 0.5,
+    max_delay: float = 10.0
+) -> Any:
+    """
+    Run coro_factory() (returns awaitable) with exponential backoff + jitter.
+    """
+    for attempt in range(retries + 1):
+        try:
+            return await coro_factory()
+        except Exception as exc:
+            if attempt >= retries:
+                raise
+            # exponential backoff with full jitter
+            delay = min(max_delay, base_delay * (2 ** attempt))
+            await asyncio.sleep(random.uniform(0, delay))
+
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
 
@@ -167,26 +187,6 @@ class HomeComAlt:
     ) -> HomeComAlt:
         """Create a new device instance."""
         return cls(session, options, auth_provider)
-
-    async def backoff_retry(
-        coro_factory: Callable[[], Any],
-        *,
-        retries: int = 3,
-        base_delay: float = 0.5,
-        max_delay: float = 10.0
-    ) -> Any:
-        """
-        Run coro_factory() (returns awaitable) with exponential backoff + jitter.
-        """
-        for attempt in range(retries + 1):
-            try:
-                return await coro_factory()
-            except Exception as exc:
-                if attempt >= retries:
-                    raise
-                # exponential backoff with full jitter
-                delay = min(max_delay, base_delay * (2 ** attempt))
-                await asyncio.sleep(random.uniform(0, delay))
 
     async def _async_http_request(
         self,
