@@ -320,7 +320,7 @@ class HomeComAlt:
 
     def check_jwt(self) -> bool:
         """Check if token is expired."""
-        token = self._options.get("token")
+        token = self._options.token
         if not token:
             return False
         try:
@@ -344,7 +344,7 @@ class HomeComAlt:
             if self.check_jwt():
                 return None
 
-            refresh_token = self._options.get("refresh_token")
+            refresh_token = self._options.refresh_token
             if refresh_token:
                 data = OAUTH_REFRESH_PARAMS.copy()
                 response = await self._async_http_request(
