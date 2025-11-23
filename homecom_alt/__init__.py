@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -11,7 +12,7 @@ import random
 import re
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
-from typing import Any
+from typing import Callable, Any
 from urllib.parse import urlencode
 
 import jwt
@@ -166,57 +167,73 @@ class HomeComAlt:
         """Create a new device instance."""
         return cls(session, options, auth_provider)
 
+    async def backoff_retry(
+        coro_factory: Callable[[], Any],
+        *,
+        retries: int = 3,
+        base_delay: float = 0.5,
+        max_delay: float = 10.0
+    ) -> Any:
+        """
+        Run coro_factory() (returns awaitable) with exponential backoff + jitter.
+        """
+        for attempt in range(retries + 1):
+            try:
+                return await coro_factory()
+            except Exception as exc:
+                if attempt >= retries:
+                    raise
+                # exponential backoff with full jitter
+                delay = min(max_delay, base_delay * (2 ** attempt))
+                await asyncio.sleep(random.uniform(0, delay))
+
     async def _async_http_request(
         self,
         method: str,
         url: str,
         data: Any | None = None,
         req_type: int | None = None,
+        retries: int = 3
     ) -> Any:
         """Retrieve data from the device."""
-        headers = {
-            "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
-        }
+        headers = {"Authorization": f"Bearer {self._options.get('token', '')}"}
         # JSON request
         if req_type == JSON:
             headers["Content-Type"] = "application/json; charset=UTF-8"
         elif req_type == URLENCODED:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-        try:
+        async def do_request():
             _LOGGER.debug("Requesting %s, method: %s", url, method)
-            resp = await self._session.request(
-                method,
-                url,
-                raise_for_status=True,
-                data=data if req_type != JSON else None,
-                json=data if req_type == JSON else None,
-                timeout=DEFAULT_TIMEOUT,
-                headers=headers,
-                allow_redirects=True,
-            )
-        except ClientResponseError as error:
-            if error.status == HTTPStatus.UNAUTHORIZED.value:
-                raise AuthFailedError("Authorization has failed") from error
-            if (
-                error.status == HTTPStatus.BAD_REQUEST.value
-                and url == "https://singlekey-id.com/auth/connect/token"
-            ):
-                return None
-            if error.status == HTTPStatus.NOT_FOUND.value:
-                # This url is not support for this type of device, just ignore it
-                return {}
-            raise ApiError(
-                f"Invalid response from url {url}: {error.status}"
-            ) from error
-        except (TimeoutError, ClientConnectorError) as error:
-            raise NotRespondingError(f"{url} is not responding") from error
+            try:
+                resp = await self._session.request(
+                    method,
+                    url,
+                    raise_for_status=True,
+                    data=data if req_type != JSON else None,
+                    json=data if req_type == JSON else None,
+                    timeout=DEFAULT_TIMEOUT,
+                    headers=headers,
+                    allow_redirects=True,
+                )
+            except ClientResponseError as error:
+                if error.status == HTTPStatus.UNAUTHORIZED.value:
+                    raise AuthFailedError("Authorization has failed") from error
+                if error.status == HTTPStatus.NOT_FOUND.value:
+                    # This url is not support for this type of device, just ignore it
+                    return {}
+                raise ApiError(
+                    f"Invalid response from url {url}: {error.status}"
+                ) from error
+            except (TimeoutError, ClientConnectorError) as error:
+                raise NotRespondingError(f"{url} is not responding") from error
 
-        _LOGGER.debug("Data retrieved from %s, status: %s", url, resp.status)
-        if resp.status not in {HTTPStatus.OK.value, HTTPStatus.NO_CONTENT.value}:
-            raise ApiError(f"Invalid response from {url}: {resp.status}")
+            if resp.status not in {HTTPStatus.OK.value, HTTPStatus.NO_CONTENT.value}:
+                raise ApiError(f"Invalid response from {url}: {resp.status}")
+            _LOGGER.debug("Data retrieved from %s, status: %s", url, resp.status)
+            return resp
 
-        return resp
+        return await backoff_retry(do_request, retries=retries)
 
     @staticmethod
     async def _to_data(response: Any) -> Any | None:
@@ -302,48 +319,53 @@ class HomeComAlt:
 
     def check_jwt(self) -> bool:
         """Check if token is expired."""
-        if not self._options.token:
+        token = self._options.get("token")
+        if not token:
             return False
         try:
             exp = jwt.decode(
-                self._options.token, options={"verify_signature": False}
+                token, options={"verify_signature": False}
             ).get("exp")
             if exp is None:
                 _LOGGER.error("Token missing 'exp' claim")
-            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC) - timedelta(minutes=5)
+                return False
+            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC)
         except jwt.DecodeError as err:
             _LOGGER.error("Invalid token: %s", err)
             return False
 
     async def get_token(self) -> bool | None:
         """Retrieve a new token using the refresh token."""
-        if self._auth_provider:
+        if not self._auth_provider:
+            return None
+
+        async with self._token_lock:
             if self.check_jwt():
                 return None
-            if self._options.refresh_token:
-                data = OAUTH_REFRESH_PARAMS
-                data["refresh_token"] = self._options.refresh_token
+
+            refresh_token = self._options.get("refresh_token")
+            if refresh_token:
+                data = OAUTH_REFRESH_PARAMS.copy()
                 response = await self._async_http_request(
                     "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
                 )
-                if response is not None:
+                if resp is not None:
                     try:
-                        response_json = await response.json()
-                    except ValueError as error:
-                        raise InvalidSensorDataError("Invalid devices data") from error
+                        response_json = await resp.json()
+                    except ValueError:
+                        raise InvalidSensorDataError("Invalid devices data")
+                    self._options["token"] = response_json["access_token"]
+                    self._options["refresh_token"] = response_json["refresh_token"]
+                    return True
 
-                    if response_json:
-                        self._options.token = response_json["access_token"]
-                        self._options.refresh_token = response_json["refresh_token"]
-                        return True
-
-            if self._options.code:
+            code = self._options.get("code")
+            if code:
                 response = await self.validate_auth(
-                    self._options.code, OAUTH_BROWSER_VERIFIER
+                    code, OAUTH_BROWSER_VERIFIER
                 )
             if response:
-                self._options.token = response["access_token"]
-                self._options.refresh_token = response["refresh_token"]
+                self._options["token"] = response["access_token"]
+                self._options["refresh_token"] = response["refresh_token"]
                 return True
             raise AuthFailedError("Failed to refresh")
         return None
