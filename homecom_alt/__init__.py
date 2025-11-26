@@ -342,6 +342,7 @@ class HomeComAlt:
                     self._options.code, OAUTH_BROWSER_VERIFIER
                 )
             if response:
+                self._options.code = None
                 self._options.token = response["access_token"]
                 self._options.refresh_token = response["refresh_token"]
                 return True
