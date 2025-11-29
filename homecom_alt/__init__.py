@@ -343,6 +343,7 @@ class HomeComAlt:
                     self._options.code, OAUTH_BROWSER_VERIFIER
                 )
             if response:
+                self._options.code = None
                 self._options.token = response["access_token"]
                 self._options.refresh_token = response["refresh_token"]
                 return True
@@ -1802,7 +1803,7 @@ class HomeComK40(HomeComAlt):
         outdoor_temp = await self.async_get_outdoor_temp(device_id)
 
         ventilation = await self.async_get_ventilation_zones(device_id)
-        ventilation_references = ventilation.get("references", [])
+        ventilation_references = (ventilation or {}).get("references", [])
         if ventilation_references:
             for ref in ventilation_references:
                 zone_id = ref["id"].split("/")[-1]
