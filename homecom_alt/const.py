@@ -39,6 +39,7 @@ OAUTH_BROWSER_VERIFIER: Final[str] = (
 BOSCHCOM_DOMAIN: Final[str] = "https://pointt-api.bosch-thermotechnology.com"
 BOSCHCOM_ENDPOINT_GATEWAYS: Final[str] = "/pointt-api/api/v1/gateways/"
 BOSCHCOM_ENDPOINT_FIRMWARE: Final[str] = "/resource/gateway/versionFirmware"
+BOSCHCOM_ENDPOINT_BULK: Final[str] = "/pointt-api/api/v1/bulk"
 BOSCHCOM_ENDPOINT_SYSTEM_INFO: Final[str] = "/resource/system/info"
 BOSCHCOM_ENDPOINT_NOTIFICATIONS: Final[str] = "/resource/notifications"
 BOSCHCOM_ENDPOINT_STANDARD: Final[str] = "/resource/airConditioning/standardFunctions"

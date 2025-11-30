@@ -107,6 +107,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+    BOSCHCOM_ENDPOINT_BULK,
     DEFAULT_TIMEOUT,
     JSON,
     OAUTH_BROWSER_VERIFIER,
@@ -953,6 +954,25 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    
+    async def async_get_consumption(
+        self, device_id: str, component: str, date: str
+    ) -> Any:
+        """Get dhw current day consumption."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "post",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_BULK,
+            [{"gatewayId": device_id, "resourcePaths" : [f"/recordings/heatSources/emon/{component}/burner?interval={date}"]}],
+            1,
+        )
+        json_response = await self._to_data(response)
+        try :
+            return json_response[0]['resourcePaths'][0]['gatewayResponse']['payload']
+        except:
+            return json_response[0]['resourcePaths'][0]['gatewayResponse']
+
     async def async_get_hs_type(self, device_id: str) -> Any:
         """Get heat source type."""
         await self.get_token()
@@ -1700,6 +1720,12 @@ class HomeComK40(HomeComAlt):
                         ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
                             device_id, dhw_id, value
                         )
+                ref["dayconsumption"] = await self.async_get_consumption(
+                    device_id, "dhw", datetime.now().strftime("%Y-%m-%d"))
+                ref["monthconsumption"] = await self.async_get_consumption(
+                    device_id, "dhw", datetime.now().strftime("%Y-%m"))
+                ref["yearconsumption"] = await self.async_get_consumption(
+                    device_id, "dhw", datetime.now().strftime("%Y"))
         else:
             dhw_circuits["references"] = {}
 
@@ -1728,6 +1754,12 @@ class HomeComK40(HomeComAlt):
                 ref[
                     "coolingRoomTempSetpoint"
                 ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
+                ref["dayconsumption"] = await self.async_get_consumption(
+                    device_id, "ch", datetime.now().strftime("%Y-%m-%d"))
+                ref["monthconsumption"] = await self.async_get_consumption(
+                    device_id, "ch", datetime.now().strftime("%Y-%m"))
+                ref["yearconsumption"] = await self.async_get_consumption(
+                    device_id, "ch", datetime.now().strftime("%Y"))
         else:
             heating_circuits["references"] = {}
 
@@ -1755,10 +1787,16 @@ class HomeComK40(HomeComAlt):
         heat_sources["totalWorkingTime"] = (
             await self.async_get_hs_working_time(device_id) or {}
         )
+        #It should actually be called totalconsumption, but for compatibility reasons it remains consumption.
         heat_sources["consumption"] = (
             await self.async_get_hs_total_consumption(device_id) or {}
         )
-
+        heat_sources["dayconsumption"] = await self.async_get_consumption(
+             device_id, "total", datetime.now().strftime("%Y-%m-%d"))
+        heat_sources["monthconsumption"] = await self.async_get_consumption(
+            device_id, "total", datetime.now().strftime("%Y-%m"))
+        heat_sources["yearconsumption"] = await self.async_get_consumption(
+            device_id, "total", datetime.now().strftime("%Y"))
         holiday_mode = await self.async_get_holiday_mode(device_id)
         away_mode = await self.async_get_away_mode(device_id)
         power_limitation = await self.async_get_power_limitation(device_id)
