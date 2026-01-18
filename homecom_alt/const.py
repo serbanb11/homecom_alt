@@ -92,6 +92,7 @@ BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
     "/resource/heatSources/actualSupplyTemperature"
 )
 BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModulation"
+BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = "/resource/heatSources/systemPressure"
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
 BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"

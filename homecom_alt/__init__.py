@@ -75,6 +75,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
     BOSCHCOM_ENDPOINT_HS_STARTS,
     BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
+    BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
     BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
@@ -1070,7 +1071,7 @@ class HomeComK40(HomeComAlt):
         return await self._to_data(response)
 
     async def async_get_hs_heat_demand(self, device_id: str) -> Any:
-        """Get actual heat deman."""
+        """Get actual heat demand."""
         await self.get_token()
         response = await self._async_http_request(
             "get",
@@ -1090,6 +1091,18 @@ class HomeComK40(HomeComAlt):
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_system_pressure(self, device_id: str) -> Any:
+        """Get heatSources system pressure."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
         )
         return await self._to_data(response)
 
@@ -1797,6 +1810,9 @@ class HomeComK40(HomeComAlt):
             device_id, "total", datetime.now().strftime("%Y-%m"))
         heat_sources["yearconsumption"] = await self.async_get_consumption(
             device_id, "total", datetime.now().strftime("%Y"))
+        heat_sources["systemPressure"] = (
+            await self.async_get_hs_system_pressure(device_id) or {}
+        )
         holiday_mode = await self.async_get_holiday_mode(device_id)
         away_mode = await self.async_get_away_mode(device_id)
         power_limitation = await self.async_get_power_limitation(device_id)
