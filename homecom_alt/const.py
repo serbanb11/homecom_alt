@@ -52,6 +52,7 @@ BOSCHCOM_ENDPOINT_SWITCH_PROGRAM: Final[str] = (
     "/resource/airConditioning/switchPrograms/activeProgram"
 )
 BOSCHCOM_ENDPOINT_TIME: Final[str] = "/resource/gateway/DateTime"
+BOSCHCOM_ENDPOINT_TIME2: Final[str] = "/resource/gateway/dateTime"
 BOSCHCOM_ENDPOINT_TIMER: Final[str] = "/resource/airConditioning/timers"
 BOSCHCOM_ENDPOINT_PV_LIST: Final[str] = "/resource/pv/list"
 BOSCHCOM_ENDPOINT_TEMP: Final[str] = "/resource/airConditioning/temperatureSetpoint"
