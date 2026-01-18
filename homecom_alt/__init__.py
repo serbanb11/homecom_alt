@@ -92,6 +92,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_TEMP,
     BOSCHCOM_ENDPOINT_TIME,
+    BOSCHCOM_ENDPOINT_TIME2,
     BOSCHCOM_ENDPOINT_TIMER,
     BOSCHCOM_ENDPOINT_VENTILATION,
     BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
@@ -292,15 +293,27 @@ class HomeComAlt:
         return await self._to_data(response)
 
     async def async_get_time(self, device_id: str) -> Any:
-        """Get switch."""
-        response = await self._async_http_request(
-            "get",
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_GATEWAYS
-            + device_id
-            + BOSCHCOM_ENDPOINT_TIME,
-        )
-        return await self._to_data(response)
+        """Get gateway time."""
+        last_exc: Exception | None = None
+
+        for ep in (BOSCHCOM_ENDPOINT_TIME, BOSCHCOM_ENDPOINT_TIME2):
+            try:
+                response = await self._async_http_request(
+                    "get",
+                    BOSCHCOM_DOMAIN
+                    + BOSCHCOM_ENDPOINT_GATEWAYS
+                    + device_id
+                    + ep,
+                )
+                if isinstance(response, dict) and response == {}:
+                    raise ApiError(f"{ep} not supported for this device.")
+                return await self._to_data(response)
+            except AuthFailedError:
+                raise
+            except (ApiError, NotRespondingError) as exc:
+                last_exc = exc
+                continue
+        raise last_exc or ApiError("Both time endpoints failed.")
 
     def check_jwt(self) -> bool:
         """Check if token is expired."""
