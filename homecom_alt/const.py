@@ -28,6 +28,27 @@ OAUTH_PARAMS: Final[dict] = {
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
 }
 
+OAUTH_LOGIN_PARAMS_BUDERUS: Final[dict] = {
+    "redirect_uri": "com.buderus.tt.dashtt://app/login",
+    "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
+    "response_type": "code",
+    "prompt": "login",
+    "scope": (
+        "openid email profile offline_access "
+        "pointt.gateway.claiming pointt.gateway.removal "
+        "pointt.gateway.list pointt.gateway.users "
+        "pointt.gateway.resource.dashapp pointt.castt.flow.token-exchange "
+        "bacon hcc.tariff.read"
+    ),
+    "code_challenge_method": "S256",
+    "style_id": "tt_bud",
+}
+OAUTH_PARAMS_BUDERUS: Final[dict] = {
+    "grant_type": "authorization_code",
+    "redirect_uri": "com.buderus.tt.dashtt://app/login",
+    "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
+}
+
 OAUTH_REFRESH_PARAMS: Final[dict[str, str]] = {
     "grant_type": "refresh_token",
     "client_id": "762162C0-FA2D-4540-AE66-6489F189FADC",
@@ -84,16 +105,24 @@ BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION: Final[str] = (
 BOSCHCOM_ENDPOINT_HS_TYPE: Final[str] = "/resource/heatSources/hs1/type"
 BOSCHCOM_ENDPOINT_HS_PUMP_TYPE: Final[str] = "/resource/heatSources/hs1/heatPumpType"
 BOSCHCOM_ENDPOINT_HS_STARTS: Final[str] = "/resource/heatSources/hs1/numberOfStarts"
-BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorInflowTemp"
-BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP: Final[str] = "/resource/heatSources/hs1/brineCircuit/collectorOutflowTemp"
+BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP: Final[str] = (
+    "/resource/heatSources/hs1/brineCircuit/collectorInflowTemp"
+)
+BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP: Final[str] = (
+    "/resource/heatSources/hs1/brineCircuit/collectorOutflowTemp"
+)
 BOSCHCOM_ENDPOINT_HS_RETURN_TEMP: Final[str] = "/resource/heatSources/returnTemperature"
 BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND: Final[str] = "/resource/heatSources/actualHeatDemand"
-BOSCHCOM_ENDPOINT_HS_WORKING_TIME: Final[str] = "/resource/heatSources/workingTime/totalSystem"
+BOSCHCOM_ENDPOINT_HS_WORKING_TIME: Final[str] = (
+    "/resource/heatSources/workingTime/totalSystem"
+)
 BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
     "/resource/heatSources/actualSupplyTemperature"
 )
 BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModulation"
-BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = "/resource/heatSources/systemPressure"
+BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
+    "/resource/heatSources/systemPressure"
+)
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
 BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
@@ -132,8 +161,12 @@ BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP: Final[str] = "/sensors/supplyTemp"
 BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP: Final[str] = "/sensors/outdoorTemp"
 BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP: Final[str] = "/sensors/exhaustTemp"
 BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP: Final[str] = "/sensors/extractTemp"
-BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY: Final[str] = "/sensors/internalAirQuality"
-BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY: Final[str] = "/sensors/internalHumidity"
+BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY: Final[str] = (
+    "/sensors/internalAirQuality"
+)
+BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY: Final[str] = (
+    "/sensors/internalHumidity"
+)
 BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE: Final[str] = "/summerBypass/enable"
 BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION: Final[str] = "/summerBypass/duration"
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY: Final[str] = "/demand/indoorAirQuality"

@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import logging
-import math
-import os
-import random
 import re
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -34,21 +29,22 @@ from .const import (
     BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL,
     BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL,
     BOSCHCOM_ENDPOINT_AWAY_MODE,
+    BOSCHCOM_ENDPOINT_BULK,
     BOSCHCOM_ENDPOINT_CONTROL,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
     BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_AIRBOX,
     BOSCHCOM_ENDPOINT_DWH_CHARGE,
     BOSCHCOM_ENDPOINT_DWH_CHARGE_DURATION,
     BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME,
     BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
     BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
-    BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
-    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
-    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
-    BOSCHCOM_ENDPOINT_DWH_AIRBOX,
     BOSCHCOM_ENDPOINT_DWH_FAN_SPEED,
     BOSCHCOM_ENDPOINT_DWH_INLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
+    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
@@ -95,27 +91,27 @@ from .const import (
     BOSCHCOM_ENDPOINT_TIME2,
     BOSCHCOM_ENDPOINT_TIMER,
     BOSCHCOM_ENDPOINT_VENTILATION,
-    BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
-    BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
-    BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
-    BOSCHCOM_ENDPOINT_VENTILATION_FAN,
-    BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
-    BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
     BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP,
     BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP,
-    BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_FAN,
+    BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
     BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
-    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+    BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+    BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+    BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP,
+    BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
-    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
-    BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
-    BOSCHCOM_ENDPOINT_BULK,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
     DEFAULT_TIMEOUT,
     JSON,
     OAUTH_BROWSER_VERIFIER,
     OAUTH_DOMAIN,
     OAUTH_ENDPOINT,
     OAUTH_PARAMS,
+    OAUTH_PARAMS_BUDERUS,
     OAUTH_REFRESH_PARAMS,
     URLENCODED,
 )
@@ -125,9 +121,16 @@ from .exceptions import (
     InvalidSensorDataError,
     NotRespondingError,
 )
-from .model import BHCDeviceGeneric, BHCDeviceK40, BHCDeviceRac, BHCDeviceWddw2, ConnectionOptions
+from .model import (
+    BHCDeviceGeneric,
+    BHCDeviceK40,
+    BHCDeviceRac,
+    BHCDeviceWddw2,
+    ConnectionOptions,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -141,6 +144,10 @@ class HomeComAlt:
         self._count = 0
         self._update_errors: int = 0
         self._auth_provider = auth_provider
+        self._oauth_params = (
+            OAUTH_PARAMS_BUDERUS if options.brand == "buderus" else OAUTH_PARAMS
+        )
+        self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
 
     @property
     def refresh_token(self) -> str | None:
@@ -300,13 +307,10 @@ class HomeComAlt:
             try:
                 response = await self._async_http_request(
                     "get",
-                    BOSCHCOM_DOMAIN
-                    + BOSCHCOM_ENDPOINT_GATEWAYS
-                    + device_id
-                    + ep,
+                    BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS + device_id + ep,
                 )
                 if isinstance(response, dict) and response == {}:
-                    raise ApiError(f"{ep} not supported for this device.")
+                    raise ApiError(f"{ep} not supported for this device.")  # noqa: TRY301
                 return await self._to_data(response)
             except AuthFailedError:
                 raise
@@ -325,7 +329,10 @@ class HomeComAlt:
             ).get("exp")
             if exp is None:
                 _LOGGER.error("Token missing 'exp' claim")
-            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC) - timedelta(minutes=5)
+                return False
+            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC) - timedelta(
+                minutes=5
+            )
         except jwt.DecodeError as err:
             _LOGGER.error("Invalid token: %s", err)
             return False
@@ -336,7 +343,7 @@ class HomeComAlt:
             if self.check_jwt():
                 return None
             if self._options.refresh_token:
-                data = OAUTH_REFRESH_PARAMS
+                data = {**self._oauth_refresh_params}
                 data["refresh_token"] = self._options.refresh_token
                 response = await self._async_http_request(
                     "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
@@ -356,11 +363,11 @@ class HomeComAlt:
                 response = await self.validate_auth(
                     self._options.code, OAUTH_BROWSER_VERIFIER
                 )
-            if response:
-                self._options.code = None
-                self._options.token = response["access_token"]
-                self._options.refresh_token = response["refresh_token"]
-                return True
+                if response:
+                    self._options.code = None
+                    self._options.token = response["access_token"]
+                    self._options.refresh_token = response["refresh_token"]
+                    return True
             raise AuthFailedError("Failed to refresh")
         return None
 
@@ -372,7 +379,7 @@ class HomeComAlt:
             "code="
             + code
             + "&"
-            + urlencode(OAUTH_PARAMS)
+            + urlencode(self._oauth_params)
             + "&code_verifier="
             + code_verifier,
             2,
@@ -968,7 +975,6 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    
     async def async_get_consumption(
         self, device_id: str, component: str, date: str
     ) -> Any:
@@ -976,16 +982,24 @@ class HomeComK40(HomeComAlt):
         await self.get_token()
         response = await self._async_http_request(
             "post",
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_BULK,
-            [{"gatewayId": device_id, "resourcePaths" : [f"/recordings/heatSources/emon/{component}/burner?interval={date}"]}],
+            BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_BULK,
+            [
+                {
+                    "gatewayId": device_id,
+                    "resourcePaths": [
+                        f"/recordings/heatSources/emon/{component}/burner?interval={date}"
+                    ],
+                }
+            ],
             1,
         )
         json_response = await self._to_data(response)
-        try :
-            return json_response[0]['resourcePaths'][0]['gatewayResponse']['payload']
-        except:
-            return json_response[0]['resourcePaths'][0]['gatewayResponse']
+        if json_response is None:
+            return None
+        try:
+            return json_response[0]["resourcePaths"][0]["gatewayResponse"]["payload"]
+        except (KeyError, IndexError, TypeError):
+            return json_response[0]["resourcePaths"][0]["gatewayResponse"]
 
     async def async_get_hs_type(self, device_id: str) -> Any:
         """Get heat source type."""
@@ -1425,7 +1439,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_exhaustfanlevel(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_exhaustfanlevel(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation exhaust fan level."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1485,7 +1501,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_set_ventilation_mode(self, device_id: str, zone_id: str, value: str) -> Any:
+    async def async_set_ventilation_mode(
+        self, device_id: str, zone_id: str, value: str
+    ) -> Any:
         """Set ventilation operation mode."""
         await self.get_token()
         await self._async_http_request(
@@ -1501,7 +1519,9 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_ventilation_exhaust_temp(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_exhaust_temp(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation exhaust temp."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1516,7 +1536,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_extract_temp(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_extract_temp(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation extract temp."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1531,7 +1553,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_internal_quality(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_internal_quality(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation internal quality."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1546,7 +1570,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_internal_humidity(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_internal_humidity(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation internal humidity."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1561,7 +1587,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_outdoor_temp(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_outdoor_temp(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation outdoor temp."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1576,7 +1604,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_supply_temp(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_supply_temp(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation supply temp."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1591,7 +1621,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_ventilation_summer_enable(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_summer_enable(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation summer enable."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1606,7 +1638,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_set_ventilation_summer_enable(self, device_id: str, zone_id: str, value: str) -> Any:
+    async def async_set_ventilation_summer_enable(
+        self, device_id: str, zone_id: str, value: str
+    ) -> Any:
         """Set ventilation summer enable."""
         await self.get_token()
         await self._async_http_request(
@@ -1622,7 +1656,9 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_ventilation_summer_duration(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_summer_duration(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation summer duration."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1637,7 +1673,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_set_ventilation_summer_duration(self, device_id: str, zone_id: str, value: str) -> Any:
+    async def async_set_ventilation_summer_duration(
+        self, device_id: str, zone_id: str, value: str
+    ) -> Any:
         """Set ventilation summer duration."""
         await self.get_token()
         await self._async_http_request(
@@ -1653,7 +1691,9 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_ventilation_demand_quality(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_demand_quality(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation demand indoor quality."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1668,7 +1708,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_set_ventilation_demand_quality(self, device_id: str, zone_id: str, value: str) -> Any:
+    async def async_set_ventilation_demand_quality(
+        self, device_id: str, zone_id: str, value: str
+    ) -> Any:
         """Set ventilation demand indoor quality."""
         await self.get_token()
         await self._async_http_request(
@@ -1684,7 +1726,9 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_ventilation_demand_humidity(self, device_id: str, zone_id: str) -> Any:
+    async def async_get_ventilation_demand_humidity(
+        self, device_id: str, zone_id: str
+    ) -> Any:
         """Get ventilation demand humidity."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1699,7 +1743,9 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_set_ventilation_demand_humidity(self, device_id: str, zone_id: str, value: str) -> Any:
+    async def async_set_ventilation_demand_humidity(
+        self, device_id: str, zone_id: str, value: str
+    ) -> Any:
         """Set ventilation demand humidity."""
         await self.get_token()
         await self._async_http_request(
@@ -1715,7 +1761,7 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_update(self, device_id: str) -> BHCDeviceK40:
+    async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0915
         """Retrieve data from the device."""
         await self.get_token()
 
@@ -1728,11 +1774,13 @@ class HomeComK40(HomeComAlt):
                 ref["operationMode"] = await self.async_get_dhw_operation_mode(
                     device_id, dhw_id
                 )
-                ref["actualTemp"] = await self.async_get_dhw_actual_temp(device_id, dhw_id)
-                ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
-                ref["chargeRemainingTime"] = await self.async_get_dhw_charge_remaining_time(
+                ref["actualTemp"] = await self.async_get_dhw_actual_temp(
                     device_id, dhw_id
                 )
+                ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
+                ref[
+                    "chargeRemainingTime"
+                ] = await self.async_get_dhw_charge_remaining_time(device_id, dhw_id)
                 ref[
                     "currentTemperatureLevel"
                 ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
@@ -1747,11 +1795,14 @@ class HomeComK40(HomeComAlt):
                             device_id, dhw_id, value
                         )
                 ref["dayconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now().strftime("%Y-%m-%d"))
+                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y-%m-%d")
+                )
                 ref["monthconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now().strftime("%Y-%m"))
+                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y-%m")
+                )
                 ref["yearconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now().strftime("%Y"))
+                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y")
+                )
         else:
             dhw_circuits["references"] = {}
 
@@ -1763,7 +1814,9 @@ class HomeComK40(HomeComAlt):
                 ref["operationMode"] = await self.async_get_hc_operation_mode(
                     device_id, hc_id
                 )
-                ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(device_id, hc_id)
+                ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(
+                    device_id, hc_id
+                )
                 ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
                     device_id, hc_id
                 )
@@ -1771,21 +1824,24 @@ class HomeComK40(HomeComAlt):
                 ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
                     device_id, hc_id
                 )
-                ref["manualRoomSetpoint"] = await self.async_get_hc_manual_room_setpoint(
-                    device_id, hc_id
-                )
-                ref["currentRoomSetpoint"] = await self.async_get_hc_current_room_setpoint(
-                    device_id, hc_id
-                )
+                ref[
+                    "manualRoomSetpoint"
+                ] = await self.async_get_hc_manual_room_setpoint(device_id, hc_id)
+                ref[
+                    "currentRoomSetpoint"
+                ] = await self.async_get_hc_current_room_setpoint(device_id, hc_id)
                 ref[
                     "coolingRoomTempSetpoint"
                 ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
                 ref["dayconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now().strftime("%Y-%m-%d"))
+                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y-%m-%d")
+                )
                 ref["monthconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now().strftime("%Y-%m"))
+                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y-%m")
+                )
                 ref["yearconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now().strftime("%Y"))
+                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y")
+                )
         else:
             heating_circuits["references"] = {}
 
@@ -1813,16 +1869,20 @@ class HomeComK40(HomeComAlt):
         heat_sources["totalWorkingTime"] = (
             await self.async_get_hs_working_time(device_id) or {}
         )
-        #It should actually be called totalconsumption, but for compatibility reasons it remains consumption.
+        # It should actually be called totalconsumption, but for
+        # compatibility reasons it remains consumption.
         heat_sources["consumption"] = (
             await self.async_get_hs_total_consumption(device_id) or {}
         )
         heat_sources["dayconsumption"] = await self.async_get_consumption(
-             device_id, "total", datetime.now().strftime("%Y-%m-%d"))
+            device_id, "total", datetime.now(tz=UTC).strftime("%Y-%m-%d")
+        )
         heat_sources["monthconsumption"] = await self.async_get_consumption(
-            device_id, "total", datetime.now().strftime("%Y-%m"))
+            device_id, "total", datetime.now(tz=UTC).strftime("%Y-%m")
+        )
         heat_sources["yearconsumption"] = await self.async_get_consumption(
-            device_id, "total", datetime.now().strftime("%Y"))
+            device_id, "total", datetime.now(tz=UTC).strftime("%Y")
+        )
         heat_sources["systemPressure"] = (
             await self.async_get_hs_system_pressure(device_id) or {}
         )
@@ -1836,20 +1896,52 @@ class HomeComK40(HomeComAlt):
         if ventilation_references:
             for ref in ventilation_references:
                 zone_id = ref["id"].split("/")[-1]
-                ref["exhaustFanLevel"] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
-                ref["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(device_id, zone_id)
-                ref["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(device_id, zone_id)
-                ref["operationMode"] = await self.async_get_ventilation_mode(device_id, zone_id)
-                ref["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(device_id, zone_id)
-                ref["extractTemp"] = await self.async_get_ventilation_extract_temp(device_id, zone_id)
-                ref["internalAirQuality"] = await self.async_get_ventilation_internal_quality(device_id, zone_id)
-                ref["internalHumidity"] = await self.async_get_ventilation_internal_humidity(device_id, zone_id)
-                ref["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(device_id, zone_id)
-                ref["supplyTemp"] = await self.async_get_ventilation_supply_temp(device_id, zone_id)
-                ref["summerBypassEnable"] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
-                ref["summerBypassDuration"] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
-                ref["demandindoorAirQuality"] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
-                ref["demandrelativeHumidity"] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
+                ref[
+                    "exhaustFanLevel"
+                ] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
+                ref["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(
+                    device_id, zone_id
+                )
+                ref["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(
+                    device_id, zone_id
+                )
+                ref["operationMode"] = await self.async_get_ventilation_mode(
+                    device_id, zone_id
+                )
+                ref["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(
+                    device_id, zone_id
+                )
+                ref["extractTemp"] = await self.async_get_ventilation_extract_temp(
+                    device_id, zone_id
+                )
+                ref[
+                    "internalAirQuality"
+                ] = await self.async_get_ventilation_internal_quality(
+                    device_id, zone_id
+                )
+                ref[
+                    "internalHumidity"
+                ] = await self.async_get_ventilation_internal_humidity(
+                    device_id, zone_id
+                )
+                ref["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(
+                    device_id, zone_id
+                )
+                ref["supplyTemp"] = await self.async_get_ventilation_supply_temp(
+                    device_id, zone_id
+                )
+                ref[
+                    "summerBypassEnable"
+                ] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
+                ref[
+                    "summerBypassDuration"
+                ] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
+                ref[
+                    "demandindoorAirQuality"
+                ] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
+                ref[
+                    "demandrelativeHumidity"
+                ] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
         else:
             ventilation_references = {}
 
@@ -1956,7 +2048,7 @@ class HomeComWddw2(HomeComAlt):
         return await self._to_data(response)
 
     async def async_set_dhw_temp_level(
-        self, device_id: str, dhw_id: str, level: str, temp: str
+        self, device_id: str, dhw_id: str, level: str, temp: float  # noqa: ARG002
     ) -> None:
         """Get dhw temp level."""
         await self.get_token()
@@ -2074,17 +2166,29 @@ class HomeComWddw2(HomeComAlt):
                     ref["operationMode"] = await self.async_get_dhw_operation_mode(
                         device_id, dhw_id
                     )
-                    ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(device_id, dhw_id)
-                    ref["fanSpeed"] = await self.async_get_dhw_fan_speed(device_id, dhw_id)
-                    ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(device_id, dhw_id)
-                    ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(device_id, dhw_id)
-                    ref["waterFlow"] = await self.async_get_dhw_water_flow(device_id, dhw_id)
+                    ref["airBoxTemperature"] = await self.async_get_dhw_airbox_temp(
+                        device_id, dhw_id
+                    )
+                    ref["fanSpeed"] = await self.async_get_dhw_fan_speed(
+                        device_id, dhw_id
+                    )
+                    ref["inletTemperature"] = await self.async_get_dhw_inlet_temp(
+                        device_id, dhw_id
+                    )
+                    ref["outletTemperature"] = await self.async_get_dhw_outlet_temp(
+                        device_id, dhw_id
+                    )
+                    ref["waterFlow"] = await self.async_get_dhw_water_flow(
+                        device_id, dhw_id
+                    )
                     ref["nbStarts"] = await self.async_get_hs_starts(device_id)
                     ref["tempLevel"] = {}
                     ctl = ref.get("operationMode") or {}
                     for value in ctl.get("allowedValues", []):
                         if value != "off":
-                            ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                            ref["tempLevel"][
+                                value
+                            ] = await self.async_get_dhw_temp_level(
                                 device_id, dhw_id, value
                             )
         else:
