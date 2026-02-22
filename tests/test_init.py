@@ -651,9 +651,12 @@ async def test_async_get_time_both_fail() -> None:
     async def side_effect(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202, ARG001
         return {}
 
-    with patch.object(
-        bhc, "_async_http_request", new=AsyncMock(side_effect=side_effect)
-    ), pytest.raises(ApiError):
+    with (
+        patch.object(
+            bhc, "_async_http_request", new=AsyncMock(side_effect=side_effect)
+        ),
+        pytest.raises(ApiError),
+    ):
         await bhc.async_get_time(DEVICE_ID)
 
     await session.close()
@@ -665,11 +668,14 @@ async def test_async_get_time_auth_failed_reraises() -> None:
     session = ClientSession()
     bhc = HomeComAlt(session, _make_options(), auth_provider=False)
 
-    with patch.object(
-        bhc,
-        "_async_http_request",
-        new=AsyncMock(side_effect=AuthFailedError("auth")),
-    ), pytest.raises(AuthFailedError):
+    with (
+        patch.object(
+            bhc,
+            "_async_http_request",
+            new=AsyncMock(side_effect=AuthFailedError("auth")),
+        ),
+        pytest.raises(AuthFailedError),
+    ):
         await bhc.async_get_time(DEVICE_ID)
 
     await session.close()
@@ -734,7 +740,6 @@ async def test_rac_async_update() -> None:
     standard_resp = _mock_json_response({"references": [{"id": "s1"}]})
     advanced_resp = _mock_json_response({"references": [{"id": "a1"}]})
     switch_resp = _mock_json_response({"references": [{"id": "sw1"}]})
-
 
     async def route_request(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
         if "notifications" in url:

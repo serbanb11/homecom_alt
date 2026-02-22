@@ -2048,7 +2048,11 @@ class HomeComWddw2(HomeComAlt):
         return await self._to_data(response)
 
     async def async_set_dhw_temp_level(
-        self, device_id: str, dhw_id: str, level: str, temp: float  # noqa: ARG002
+        self,
+        device_id: str,
+        dhw_id: str,
+        level: str,  # noqa: ARG002
+        temp: float,
     ) -> None:
         """Get dhw temp level."""
         await self.get_token()
