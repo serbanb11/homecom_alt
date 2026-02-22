@@ -51,6 +51,11 @@ class BHCDeviceK40:
     dhw_circuits: list | None
     heating_circuits: list | None
     ventilation: list | None
+    zones: list | None
+    flame_indication: list | None
+    energy_history: list | None
+    indoor_humidity: list | None
+    devices: list | None
 
 
 @dataclass(frozen=True)

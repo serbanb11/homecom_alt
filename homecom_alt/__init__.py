@@ -30,7 +30,9 @@ from .const import (
     BOSCHCOM_ENDPOINT_AIRFLOW_VERTICAL,
     BOSCHCOM_ENDPOINT_AWAY_MODE,
     BOSCHCOM_ENDPOINT_BULK,
+    BOSCHCOM_ENDPOINT_CHILD_LOCK,
     BOSCHCOM_ENDPOINT_CONTROL,
+    BOSCHCOM_ENDPOINT_DEVICES,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
     BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
     BOSCHCOM_ENDPOINT_DWH_AIRBOX,
@@ -47,22 +49,33 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
+    BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
     BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
+    BOSCHCOM_ENDPOINT_HC_CONTROL,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
     BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
+    BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN,
     BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
     BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
     BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
+    BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
+    BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE,
+    BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD,
     BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
+    BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE,
     BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
+    BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
     BOSCHCOM_ENDPOINT_HS_MODULATION,
@@ -75,6 +88,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
+    BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
@@ -105,6 +119,9 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
     BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
+    BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+    BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
+    BOSCHCOM_ENDPOINT_ZONES,
     DEFAULT_TIMEOUT,
     JSON,
     OAUTH_BROWSER_VERIFIER,
@@ -1761,7 +1778,431 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0915
+    async def async_get_zones(self, device_id: str) -> Any:
+        """Get zones."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES,
+        )
+        return await self._to_data(response)
+
+    async def async_get_zone_temp_actual(self, device_id: str, zone_id: str) -> Any:
+        """Get zone actual temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
+        )
+        return await self._to_data(response)
+
+    async def async_get_zone_manual_temp_heating(
+        self, device_id: str, zone_id: str
+    ) -> Any:
+        """Get zone manual temperature heating."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+        )
+        return await self._to_data(response)
+
+    async def async_set_zone_manual_temp_heating(
+        self, device_id: str, zone_id: str, temp: float
+    ) -> None:
+        """Set zone manual temperature heating."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+            {"value": temp},
+            1,
+        )
+
+    async def async_get_hc_max_supply(self, device_id: str, hc_id: str) -> Any:
+        """Get hc max supply temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_max_supply(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc max supply temperature."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_min_supply(self, device_id: str, hc_id: str) -> Any:
+        """Get hc min supply temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_min_supply(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc min supply temperature."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_heat_curve_max(self, device_id: str, hc_id: str) -> Any:
+        """Get hc heat curve max temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_heat_curve_max(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc heat curve max temperature."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_heat_curve_min(self, device_id: str, hc_id: str) -> Any:
+        """Get hc heat curve min temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_heat_curve_min(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc heat curve min temperature."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_supply_temp_setpoint(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """Get hc supply temperature setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hc_night_switch_mode(self, device_id: str, hc_id: str) -> Any:
+        """Get hc night switch mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_night_switch_mode(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc night switch mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_control(self, device_id: str, hc_id: str) -> Any:
+        """Get hc control mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_CONTROL,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_control(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc control mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_CONTROL,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_night_threshold(self, device_id: str, hc_id: str) -> Any:
+        """Get hc night threshold."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_night_threshold(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc night threshold."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hc_room_influence(self, device_id: str, hc_id: str) -> Any:
+        """Get hc room influence."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE,
+        )
+        return await self._to_data(response)
+
+    async def async_set_hc_room_influence(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Set hc room influence."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_hs_flame_indication(self, device_id: str) -> Any:
+        """Get heat source flame indication."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_FLAME,
+        )
+        return await self._to_data(response)
+
+    async def async_get_energy_history(self, device_id: str) -> Any:
+        """Get energy history."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_indoor_humidity(self, device_id: str) -> Any:
+        """Get indoor humidity."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_devices_list(self, device_id: str) -> Any:
+        """Get devices list."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DEVICES,
+        )
+        return await self._to_data(response)
+
+    async def async_get_child_lock(self, device_id: str, dev_id: str) -> Any:
+        """Get child lock status."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DEVICES
+            + "/"
+            + dev_id
+            + BOSCHCOM_ENDPOINT_CHILD_LOCK,
+        )
+        return await self._to_data(response)
+
+    async def async_set_child_lock(
+        self, device_id: str, dev_id: str, value: str
+    ) -> None:
+        """Set child lock status."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DEVICES
+            + "/"
+            + dev_id
+            + BOSCHCOM_ENDPOINT_CHILD_LOCK,
+            {"value": value},
+            1,
+        )
+
+    async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0912, PLR0915
         """Retrieve data from the device."""
         await self.get_token()
 
@@ -1833,6 +2274,27 @@ class HomeComK40(HomeComAlt):
                 ref[
                     "coolingRoomTempSetpoint"
                 ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
+                ref["maxSupply"] = await self.async_get_hc_max_supply(device_id, hc_id)
+                ref["minSupply"] = await self.async_get_hc_min_supply(device_id, hc_id)
+                ref["heatCurveMax"] = await self.async_get_hc_heat_curve_max(
+                    device_id, hc_id
+                )
+                ref["heatCurveMin"] = await self.async_get_hc_heat_curve_min(
+                    device_id, hc_id
+                )
+                ref[
+                    "supplyTemperatureSetpoint"
+                ] = await self.async_get_hc_supply_temp_setpoint(device_id, hc_id)
+                ref["nightSwitchMode"] = await self.async_get_hc_night_switch_mode(
+                    device_id, hc_id
+                )
+                ref["control"] = await self.async_get_hc_control(device_id, hc_id)
+                ref["nightThreshold"] = await self.async_get_hc_night_threshold(
+                    device_id, hc_id
+                )
+                ref["roomInfluence"] = await self.async_get_hc_room_influence(
+                    device_id, hc_id
+                )
                 ref["dayconsumption"] = await self.async_get_consumption(
                     device_id, "ch", datetime.now(tz=UTC).strftime("%Y-%m-%d")
                 )
@@ -1945,6 +2407,35 @@ class HomeComK40(HomeComAlt):
         else:
             ventilation_references = {}
 
+        zones = await self.async_get_zones(device_id)
+        zones_references = (zones or {}).get("references", [])
+        if zones_references:
+            for ref in zones_references:
+                zone_id = ref["id"].split("/")[-1]
+                ref["temperatureActual"] = await self.async_get_zone_temp_actual(
+                    device_id, zone_id
+                )
+                ref[
+                    "manualTemperatureHeating"
+                ] = await self.async_get_zone_manual_temp_heating(device_id, zone_id)
+        else:
+            zones_references = {}
+
+        flame_indication = await self.async_get_hs_flame_indication(device_id)
+        heat_sources["flameIndication"] = flame_indication or {}
+
+        energy_history = await self.async_get_energy_history(device_id)
+        indoor_humidity = await self.async_get_indoor_humidity(device_id)
+
+        devices = await self.async_get_devices_list(device_id)
+        devices_references = (devices or {}).get("references", [])
+        if devices_references:
+            for ref in devices_references:
+                dev_id = ref["id"].split("/")[-1]
+                ref["childLock"] = await self.async_get_child_lock(device_id, dev_id)
+        else:
+            devices_references = {}
+
         return BHCDeviceK40(
             device=device_id,
             firmware=[],
@@ -1957,6 +2448,11 @@ class HomeComK40(HomeComAlt):
             dhw_circuits=dhw_circuits["references"],
             heating_circuits=heating_circuits["references"],
             ventilation=ventilation_references,
+            zones=zones_references,
+            flame_indication=flame_indication,
+            energy_history=energy_history,
+            indoor_humidity=indoor_humidity,
+            devices=devices_references,
         )
 
 

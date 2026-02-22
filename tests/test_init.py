@@ -1064,6 +1064,24 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             return _mock_json_response({"value": 21})
         if "heatingCircuits" in url and "cooling/roomTempSetpoint" in url:
             return _mock_json_response({"value": 25})
+        if "heatingCircuits" in url and "maxSupply" in url:
+            return _mock_json_response({"value": 90})
+        if "heatingCircuits" in url and "minSupply" in url:
+            return _mock_json_response({"value": 20})
+        if "heatingCircuits" in url and "heatCurveMax" in url:
+            return _mock_json_response({"value": 75})
+        if "heatingCircuits" in url and "heatCurveMin" in url:
+            return _mock_json_response({"value": 20})
+        if "heatingCircuits" in url and "supplyTemperatureSetpoint" in url:
+            return _mock_json_response({"value": 39})
+        if "heatingCircuits" in url and "nightSwitchMode" in url:
+            return _mock_json_response({"value": "off"})
+        if "heatingCircuits" in url and "control" in url:
+            return _mock_json_response({"value": "weather"})
+        if "heatingCircuits" in url and "nightThreshold" in url:
+            return _mock_json_response({"value": 21})
+        if "heatingCircuits" in url and "roomInfluence" in url:
+            return _mock_json_response({"value": 3})
         if url.endswith("/resource/heatingCircuits"):
             return _mock_json_response(
                 {
@@ -1092,6 +1110,8 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             return _mock_json_response({"value": 1234})
         if "systemPressure" in url:
             return _mock_json_response({"value": 1.5})
+        if "flameIndication" in url:
+            return _mock_json_response({"value": "ch"})
         if "holidayMode" in url:
             return _mock_json_response({"value": "off"})
         if "awayMode" in url:
@@ -1100,7 +1120,15 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             return _mock_json_response({"value": "off"})
         if "outdoor_t1" in url:
             return _mock_json_response({"value": 5.0})
+        if "indoor_h1" in url:
+            return _mock_json_response({"value": 43.5})
         if "ventilation" in url:
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/zones"):
+            return _mock_json_response({"references": []})
+        if "energy/history" in url:
+            return _mock_json_response({"value": []})
+        if url.endswith("/resource/devices"):
             return _mock_json_response({"references": []})
         if "bulk" in url:
             return _mock_json_response(
@@ -1120,17 +1148,32 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     assert "off" not in result.dhw_circuits[0]["tempLevel"]
     assert isinstance(result.heating_circuits, list)
     assert len(result.heating_circuits) == 1
+    hc = result.heating_circuits[0]
+    assert hc["maxSupply"] == {"value": 90}
+    assert hc["minSupply"] == {"value": 20}
+    assert hc["heatCurveMax"] == {"value": 75}
+    assert hc["heatCurveMin"] == {"value": 20}
+    assert hc["supplyTemperatureSetpoint"] == {"value": 39}
+    assert hc["nightSwitchMode"] == {"value": "off"}
+    assert hc["control"] == {"value": "weather"}
+    assert hc["nightThreshold"] == {"value": 21}
+    assert hc["roomInfluence"] == {"value": 3}
+    assert result.flame_indication == {"value": "ch"}
+    assert result.indoor_humidity == {"value": 43.5}
+    assert result.energy_history == {"value": []}
+    assert result.zones == {}
+    assert result.devices == {}
 
     await session.close()
 
 
 @pytest.mark.asyncio
 async def test_k40_async_update_empty_references() -> None:
-    """K40 update when DHW, HC and ventilation have no references."""
+    """K40 update when DHW, HC, ventilation, zones, and devices have no references."""
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
         if "notifications" in url:
             return _mock_json_response({"values": []})
         if url.endswith("/resource/dhwCircuits"):
@@ -1138,6 +1181,10 @@ async def test_k40_async_update_empty_references() -> None:
         if url.endswith("/resource/heatingCircuits"):
             return _mock_json_response({"references": []})
         if "ventilation" in url:
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/zones"):
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/devices"):
             return _mock_json_response({"references": []})
         if "bulk" in url:
             return _mock_json_response(
@@ -1151,6 +1198,8 @@ async def test_k40_async_update_empty_references() -> None:
     assert result.dhw_circuits == {}
     assert result.heating_circuits == {}
     assert result.ventilation == {}
+    assert result.zones == {}
+    assert result.devices == {}
 
     await session.close()
 
@@ -1202,6 +1251,10 @@ async def test_k40_async_update_with_ventilation() -> None:
             return _mock_json_response({"value": 70})
         if "ventilation" in url and "demand/relativeHumidity" in url:
             return _mock_json_response({"value": 55})
+        if url.endswith("/resource/zones"):
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/devices"):
+            return _mock_json_response({"references": []})
         if "bulk" in url:
             return _mock_json_response(
                 [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
@@ -1614,6 +1667,245 @@ async def test_k40_ventilation_setters() -> None:
     with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
         await k40.async_set_ventilation_demand_humidity(DEVICE_ID, "zone1", "60")
         assert mock_req.call_args[0][2] == {"value": "60"}
+
+    await session.close()
+
+
+# ---------------------------------------------------------------------------
+# K40 new API methods - zones, HC extensions, flame, energy, humidity, devices
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_k40_zone_methods() -> None:
+    """Test K40 zone getter and setter methods."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response({"references": [{"id": "/zones/zn1"}]})
+        ),
+    ):
+        result = await k40.async_get_zones(DEVICE_ID)
+        assert result == {"references": [{"id": "/zones/zn1"}]}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 23.5})),
+    ):
+        result = await k40.async_get_zone_temp_actual(DEVICE_ID, "zn1")
+        assert result == {"value": 23.5}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 21})),
+    ):
+        result = await k40.async_get_zone_manual_temp_heating(DEVICE_ID, "zn1")
+        assert result == {"value": 21}
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_set_zone_manual_temp_heating(DEVICE_ID, "zn1", 22.0)
+        assert mock_req.call_args[0][2] == {"value": 22.0}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_hc_new_getters() -> None:
+    """Test K40 new HC getter methods."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    for method_name in (
+        "async_get_hc_max_supply",
+        "async_get_hc_min_supply",
+        "async_get_hc_heat_curve_max",
+        "async_get_hc_heat_curve_min",
+        "async_get_hc_supply_temp_setpoint",
+        "async_get_hc_night_switch_mode",
+        "async_get_hc_control",
+        "async_get_hc_night_threshold",
+        "async_get_hc_room_influence",
+    ):
+        with patch.object(
+            k40,
+            "_async_http_request",
+            new=AsyncMock(return_value=_mock_json_response({"value": 42})),
+        ):
+            result = await getattr(k40, method_name)(DEVICE_ID, "hc1")
+            assert result == {"value": 42}, f"{method_name} failed"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_hc_new_setters() -> None:
+    """Test K40 new HC setter methods."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    setters = (
+        ("async_set_hc_max_supply", "90"),
+        ("async_set_hc_min_supply", "20"),
+        ("async_set_hc_heat_curve_max", "75"),
+        ("async_set_hc_heat_curve_min", "20"),
+        ("async_set_hc_night_switch_mode", "on"),
+        ("async_set_hc_control", "weather"),
+        ("async_set_hc_night_threshold", "21"),
+        ("async_set_hc_room_influence", "3"),
+    )
+
+    for method_name, val in setters:
+        with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+            await getattr(k40, method_name)(DEVICE_ID, "hc1", val)
+            assert mock_req.call_args[0][2] == {"value": val}, f"{method_name} failed"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_hs_flame_indication() -> None:
+    """Test K40 flame indication getter."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "ch"})),
+    ):
+        result = await k40.async_get_hs_flame_indication(DEVICE_ID)
+        assert result == {"value": "ch"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_energy_history() -> None:
+    """Test K40 energy history getter."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response(
+                {"value": [{"d": "19-02-2026", "T": 5.5, "gCh": 106.38}]}
+            )
+        ),
+    ):
+        result = await k40.async_get_energy_history(DEVICE_ID)
+        assert result == {"value": [{"d": "19-02-2026", "T": 5.5, "gCh": 106.38}]}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_indoor_humidity() -> None:
+    """Test K40 indoor humidity getter."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 43.5})),
+    ):
+        result = await k40.async_get_indoor_humidity(DEVICE_ID)
+        assert result == {"value": 43.5}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_devices_and_child_lock() -> None:
+    """Test K40 devices list and child lock get/set."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response(
+                {"references": [{"id": "/devices/device1"}]}
+            )
+        ),
+    ):
+        result = await k40.async_get_devices_list(DEVICE_ID)
+        assert result == {"references": [{"id": "/devices/device1"}]}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "false"})),
+    ):
+        result = await k40.async_get_child_lock(DEVICE_ID, "device1")
+        assert result == {"value": "false"}
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_set_child_lock(DEVICE_ID, "device1", "true")
+        assert mock_req.call_args[0][2] == {"value": "true"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_with_zones_and_devices() -> None:
+    """K40 update with zones and devices populated."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if url.endswith("/resource/dhwCircuits"):
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/heatingCircuits"):
+            return _mock_json_response({"references": []})
+        if "ventilation" in url:
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/zones"):
+            return _mock_json_response({"references": [{"id": "/zones/zn1"}]})
+        if "zones" in url and "temperatureActual" in url:
+            return _mock_json_response({"value": 23.5})
+        if "zones" in url and "manualTemperatureHeating" in url:
+            return _mock_json_response({"value": 21})
+        if url.endswith("/resource/devices"):
+            return _mock_json_response({"references": [{"id": "/devices/device1"}]})
+        if "devices" in url and "childLock" in url:
+            return _mock_json_response({"value": "false"})
+        if "flameIndication" in url:
+            return _mock_json_response({"value": "ch"})
+        if "energy/history" in url:
+            return _mock_json_response({"value": []})
+        if "indoor_h1" in url:
+            return _mock_json_response({"value": 43.5})
+        if "bulk" in url:
+            return _mock_json_response(
+                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
+            )
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert isinstance(result.zones, list)
+    assert len(result.zones) == 1
+    assert result.zones[0]["temperatureActual"] == {"value": 23.5}
+    assert result.zones[0]["manualTemperatureHeating"] == {"value": 21}
+    assert isinstance(result.devices, list)
+    assert len(result.devices) == 1
+    assert result.devices[0]["childLock"] == {"value": "false"}
+    assert result.flame_indication == {"value": "ch"}
+    assert result.energy_history == {"value": []}
+    assert result.indoor_humidity == {"value": 43.5}
 
     await session.close()
 

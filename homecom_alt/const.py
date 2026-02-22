@@ -172,6 +172,31 @@ BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION: Final[str] = "/summerBypass/durat
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY: Final[str] = "/demand/indoorAirQuality"
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY: Final[str] = "/demand/relativeHumidity"
 
+BOSCHCOM_ENDPOINT_ZONES: Final[str] = "/resource/zones"
+BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL: Final[str] = "/temperatureActual"
+BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING: Final[str] = "/manualTemperatureHeating"
+
+BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY: Final[str] = "/maxSupply"
+BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY: Final[str] = "/minSupply"
+BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX: Final[str] = "/heatCurveMax"
+BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN: Final[str] = "/heatCurveMin"
+BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT: Final[str] = "/supplyTemperatureSetpoint"
+BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE: Final[str] = "/nightSwitchMode"
+BOSCHCOM_ENDPOINT_HC_CONTROL: Final[str] = "/control"
+BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD: Final[str] = "/nightThreshold"
+BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE: Final[str] = "/roomInfluence"
+
+BOSCHCOM_ENDPOINT_HS_FLAME: Final[str] = "/resource/heatSources/flameIndication"
+
+BOSCHCOM_ENDPOINT_ENERGY_HISTORY: Final[str] = "/resource/energy/history"
+
+BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY: Final[str] = (
+    "/resource/system/sensors/humidity/indoor_h1"
+)
+
+BOSCHCOM_ENDPOINT_DEVICES: Final[str] = "/resource/devices"
+BOSCHCOM_ENDPOINT_CHILD_LOCK: Final[str] = "/thermostat/childLock/enabled"
+
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"
 ATTR_MODE: Final[str] = "operationMode"
