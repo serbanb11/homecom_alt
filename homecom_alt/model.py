@@ -12,6 +12,7 @@ class ConnectionOptions:
     refresh_token: str | None = None
     code: str | None = None
     auth_provider: bool = False
+    brand: str = "bosch"
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,7 @@ class BHCDeviceK40:
     away_mode: list | None
     power_limitation: list | None
     outdoor_temp: list | None
-    heat_sources: list | None
+    heat_sources: dict | None
     dhw_circuits: list | None
     heating_circuits: list | None
     ventilation: list | None
