@@ -230,7 +230,10 @@ class HomeComAlt:
                 and url == "https://singlekey-id.com/auth/connect/token"
             ):
                 return None
-            if error.status == HTTPStatus.NOT_FOUND.value:
+            if error.status in (
+                HTTPStatus.NOT_FOUND.value,       # 404
+                HTTPStatus.FORBIDDEN.value,       # 403
+            ):
                 # This url is not support for this type of device, just ignore it
                 return {}
             raise ApiError(
