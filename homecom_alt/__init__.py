@@ -32,6 +32,15 @@ from .const import (
     BOSCHCOM_ENDPOINT_BULK,
     BOSCHCOM_ENDPOINT_CHILD_LOCK,
     BOSCHCOM_ENDPOINT_CONTROL,
+    BOSCHCOM_ENDPOINT_CP,
+    BOSCHCOM_ENDPOINT_CP_CHARGELOG,
+    BOSCHCOM_ENDPOINT_CP_CONF,
+    BOSCHCOM_ENDPOINT_CP_CONF_AUTH,
+    BOSCHCOM_ENDPOINT_CP_CONF_LOCKED,
+    BOSCHCOM_ENDPOINT_CP_CONF_PRICE,
+    BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
+    BOSCHCOM_ENDPOINT_CP_INFO,
+    BOSCHCOM_ENDPOINT_CP_TELEMETRY,
     BOSCHCOM_ENDPOINT_DEVICES,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
     BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
@@ -50,6 +59,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
+    BOSCHCOM_ENDPOINT_ETH0_STATE,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
@@ -139,6 +149,7 @@ from .exceptions import (
     NotRespondingError,
 )
 from .model import (
+    BHCDeviceCommodule,
     BHCDeviceGeneric,
     BHCDeviceK40,
     BHCDeviceRac,
@@ -231,8 +242,8 @@ class HomeComAlt:
             ):
                 return None
             if error.status in (
-                HTTPStatus.NOT_FOUND.value,       # 404
-                HTTPStatus.FORBIDDEN.value,       # 403
+                HTTPStatus.NOT_FOUND.value,  # 404
+                HTTPStatus.FORBIDDEN.value,  # 403
             ):
                 # This url is not support for this type of device, just ignore it
                 return {}
@@ -2702,4 +2713,271 @@ class HomeComWddw2(HomeComAlt):
             firmware=[],
             notifications=notifications.get("values", []),
             dhw_circuits=dhw_circuits["references"],
+        )
+
+
+class HomeComCommodule(HomeComAlt):
+    """Main class to perform HomeCom Easy requests for device type commodule."""
+
+    def __init__(
+        self, session: ClientSession, options: Any, device_id: str, auth_provider: bool
+    ) -> None:
+        """Initialize commodule device."""
+        super().__init__(session, options, auth_provider)
+        self.device_id = device_id
+        self.device_type = "commodule"
+
+    async def async_get_charge_points(self, device_id: str) -> Any:
+        """Get charge points."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_conf(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point configuration."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_info(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point info."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_INFO,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_telemetry(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point telemetry."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_TELEMETRY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_chargelog(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point charge log."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CHARGELOG,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_conf_price(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point electricity price."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_PRICE,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_conf_locked(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point lock state."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_LOCKED,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_conf_auth(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point auth setting."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_AUTH,
+        )
+        return await self._to_data(response)
+
+    async def async_get_cp_conf_rfid_secure(self, device_id: str, cp_id: str) -> Any:
+        """Get charge point RFID security setting."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
+        )
+        return await self._to_data(response)
+
+    async def async_get_eth0_state(self, device_id: str) -> Any:
+        """Get ethernet connection state."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ETH0_STATE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_cp_conf_price(
+        self, device_id: str, cp_id: str, price: float
+    ) -> None:
+        """Set charge point electricity price."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_PRICE,
+            {"value": round(price, 2)},
+            1,
+        )
+
+    async def async_put_cp_conf_locked(
+        self, device_id: str, cp_id: str, value: str
+    ) -> None:
+        """Set charge point lock state."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_LOCKED,
+            {"value": value},
+            1,
+        )
+
+    async def async_put_cp_conf_auth(
+        self, device_id: str, cp_id: str, value: str
+    ) -> None:
+        """Set charge point auth setting."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_AUTH,
+            {"value": value},
+            1,
+        )
+
+    async def async_put_cp_conf_rfid_secure(
+        self, device_id: str, cp_id: str, value: str
+    ) -> None:
+        """Set charge point RFID security setting."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
+            {"value": value},
+            1,
+        )
+
+    async def async_update(self, device_id: str) -> BHCDeviceCommodule:
+        """Retrieve data from the device."""
+        await self.get_token()
+
+        notifications = await self.async_get_notifications(device_id)
+        eth0_state = await self.async_get_eth0_state(device_id)
+        charge_points_data = await self.async_get_charge_points(device_id)
+        references = charge_points_data.get("references", [])
+        if references:
+            for ref in references:
+                cp_id = ref["id"].split("/")[-1]
+                if re.fullmatch(r"cp\d+", cp_id):
+                    ref["conf"] = await self.async_get_cp_conf(device_id, cp_id)
+                    ref["info"] = await self.async_get_cp_info(device_id, cp_id)
+                    ref["telemetry"] = await self.async_get_cp_telemetry(
+                        device_id, cp_id
+                    )
+                    ref["chargelog"] = await self.async_get_cp_chargelog(
+                        device_id, cp_id
+                    )
+                    ref["price"] = await self.async_get_cp_conf_price(device_id, cp_id)
+                    ref["locked"] = await self.async_get_cp_conf_locked(
+                        device_id, cp_id
+                    )
+                    ref["auth"] = await self.async_get_cp_conf_auth(device_id, cp_id)
+                    ref["rfidSecure"] = await self.async_get_cp_conf_rfid_secure(
+                        device_id, cp_id
+                    )
+        else:
+            charge_points_data["references"] = {}
+
+        return BHCDeviceCommodule(
+            device=device_id,
+            firmware=[],
+            notifications=notifications.get("values", []),
+            charge_points=charge_points_data["references"],
+            eth0_state=eth0_state,
         )

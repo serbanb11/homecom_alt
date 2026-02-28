@@ -8,38 +8,42 @@ homecom_alt is an async Python wrapper for controlling Bosch Thermotechnology de
 
 Requires Python >= 3.12. Runtime dependencies: `aiohttp`, `tenacity`, `PyJWT`.
 
+## Virtual Environment
+
+**Always use the project venv at `.venv/` for all commands.** Never install packages globally or run tools without the venv. Prefix all commands with `.venv/bin/` or activate the venv first.
+
 ## Common Commands
 
 ### Testing
 ```bash
-tox -e py312              # Run tests on Python 3.12
-tox -e py313              # Run tests on Python 3.13
-pytest --timeout=30 --cov=homecom_alt tests/  # Run tests directly with coverage
-pytest tests/test_init.py::TestClassName::test_method  # Run a single test
+.venv/bin/tox -e py312              # Run tests on Python 3.12
+.venv/bin/tox -e py313              # Run tests on Python 3.13
+.venv/bin/pytest --timeout=30 --cov=homecom_alt tests/  # Run tests directly with coverage
+.venv/bin/pytest tests/test_init.py::TestClassName::test_method  # Run a single test
 ```
 
 ### Linting & Formatting
 ```bash
-ruff check .              # Lint (all rules enabled, see pyproject.toml for ignores)
-ruff format .             # Format code
-ruff check --fix .        # Auto-fix lint issues
-tox -e lint               # Lint via tox (check + format check)
+.venv/bin/ruff check .              # Lint (all rules enabled, see pyproject.toml for ignores)
+.venv/bin/ruff format .             # Format code
+.venv/bin/ruff check --fix .        # Auto-fix lint issues
+.venv/bin/tox -e lint               # Lint via tox (check + format check)
 ```
 
 ### Type Checking
 ```bash
-mypy homecom_alt          # Strict mode - all functions must have type hints
-tox -e typing             # Type check via tox
+.venv/bin/mypy homecom_alt          # Strict mode - all functions must have type hints
+.venv/bin/tox -e typing             # Type check via tox
 ```
 
 ### Coverage
 ```bash
-tox -e coverage           # Coverage check (40% minimum threshold)
+.venv/bin/tox -e coverage           # Coverage check (40% minimum threshold)
 ```
 
 ### Run All Checks
 ```bash
-tox                       # Runs: py312, py313, lint, typing, coverage
+.venv/bin/tox                       # Runs: py312, py313, lint, typing, coverage
 ```
 
 ## Architecture

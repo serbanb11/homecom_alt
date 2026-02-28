@@ -15,6 +15,7 @@ from homecom_alt import (
     AuthFailedError,
     ConnectionOptions,
     HomeComAlt,
+    HomeComCommodule,
     HomeComGeneric,
     HomeComK40,
     HomeComRac,
@@ -2113,6 +2114,233 @@ async def test_wddw2_dhw_operation_mode_put() -> None:
     with patch.object(wddw2, "_async_http_request", new=AsyncMock()) as mock_req:
         await wddw2.async_put_dhw_operation_mode(DEVICE_ID, "dhw1", "manual")
         assert mock_req.call_args[0][2] == {"value": "manual"}
+
+    await session.close()
+
+
+# ===========================================================================
+# HomeComCommodule (wallbox / EV charger)
+# ===========================================================================
+
+
+def _make_commodule(session):  # noqa: ANN001, ANN202
+    return HomeComCommodule(session, _make_options(), DEVICE_ID, auth_provider=False)
+
+
+@pytest.mark.asyncio
+async def test_commodule_async_update() -> None:
+    """Full commodule update with charge points and regex matching."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
+        if "notifications" in url:
+            return _mock_json_response({"values": [{"code": "info"}]})
+        if "eth0/state" in url:
+            return _mock_json_response({"value": "connected"})
+        if url.endswith("/resource/rest/v1"):
+            return _mock_json_response({"references": [{"id": "/rest/v1/cp0"}]})
+        if "/cp0/conf/price" in url:
+            return _mock_json_response({"value": 0.29})
+        if "/cp0/conf/locked" in url:
+            return _mock_json_response({"value": "off"})
+        if "/cp0/conf/auth" in url:
+            return _mock_json_response({"value": "on"})
+        if "/cp0/conf/rfid/secure" in url:
+            return _mock_json_response({"value": "off"})
+        if "/cp0/conf" in url:
+            return _mock_json_response({"maxCurrent": 32})
+        if "/cp0/info" in url:
+            return _mock_json_response({"product": "Power Charge 7000i"})
+        if "/cp0/telemetry" in url:
+            return _mock_json_response({"wbState": "Available", "actualPower": 0})
+        if "/cp0/chargelog" in url:
+            return _mock_json_response({"sessions": []})
+        return _mock_json_response({})
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await cm.async_update(DEVICE_ID)
+
+    assert result.device == DEVICE_ID
+    assert result.notifications == [{"code": "info"}]
+    assert result.eth0_state == {"value": "connected"}
+    assert isinstance(result.charge_points, list)
+    assert len(result.charge_points) == 1
+    ref = result.charge_points[0]
+    assert ref["conf"] == {"maxCurrent": 32}
+    assert ref["info"] == {"product": "Power Charge 7000i"}
+    assert ref["telemetry"] == {"wbState": "Available", "actualPower": 0}
+    assert ref["chargelog"] == {"sessions": []}
+    assert ref["price"] == {"value": 0.29}
+    assert ref["locked"] == {"value": "off"}
+    assert ref["auth"] == {"value": "on"}
+    assert ref["rfidSecure"] == {"value": "off"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_async_update_no_references() -> None:
+    """Empty references - references set to empty dict."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if "eth0/state" in url:
+            return _mock_json_response({"value": "disconnected"})
+        if url.endswith("/resource/rest/v1"):
+            return _mock_json_response({"references": []})
+        return _mock_json_response({})
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await cm.async_update(DEVICE_ID)
+
+    assert result.charge_points == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_conf() -> None:
+    """Test commodule get charge point config."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"maxCurrent": 32})),
+    ):
+        result = await cm.async_get_cp_conf(DEVICE_ID, "cp0")
+        assert result == {"maxCurrent": 32}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_telemetry() -> None:
+    """Test commodule get charge point telemetry."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response(
+                {"wbState": "Charging", "actualPower": 7.4}
+            )
+        ),
+    ):
+        result = await cm.async_get_cp_telemetry(DEVICE_ID, "cp0")
+        assert result == {"wbState": "Charging", "actualPower": 7.4}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_chargelog() -> None:
+    """Test commodule get charge point charge log."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"sessions": [{"energy": 10}]})),
+    ):
+        result = await cm.async_get_cp_chargelog(DEVICE_ID, "cp0")
+        assert result == {"sessions": [{"energy": 10}]}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_info() -> None:
+    """Test commodule get charge point info."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response({"product": "Power Charge 7000i"})
+        ),
+    ):
+        result = await cm.async_get_cp_info(DEVICE_ID, "cp0")
+        assert result == {"product": "Power Charge 7000i"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_eth0_state() -> None:
+    """Test commodule get ethernet state."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "connected"})),
+    ):
+        result = await cm.async_get_eth0_state(DEVICE_ID)
+        assert result == {"value": "connected"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_put_conf_price() -> None:
+    """Test commodule set electricity price."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
+        await cm.async_put_cp_conf_price(DEVICE_ID, "cp0", 0.293)
+        assert mock_req.call_args[0][2] == {"value": 0.29}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_put_conf_locked() -> None:
+    """Test commodule set lock state."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
+        await cm.async_put_cp_conf_locked(DEVICE_ID, "cp0", "on")
+        assert mock_req.call_args[0][2] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_put_conf_auth() -> None:
+    """Test commodule set auth setting."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
+        await cm.async_put_cp_conf_auth(DEVICE_ID, "cp0", "on")
+        assert mock_req.call_args[0][2] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_put_conf_rfid_secure() -> None:
+    """Test commodule set RFID security."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
+        await cm.async_put_cp_conf_rfid_secure(DEVICE_ID, "cp0", "on")
+        assert mock_req.call_args[0][2] == {"value": "on"}
 
     await session.close()
 

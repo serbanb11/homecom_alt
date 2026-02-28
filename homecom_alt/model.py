@@ -66,3 +66,14 @@ class BHCDeviceWddw2:
     firmware: list | None
     notifications: list | None
     dhw_circuits: list | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceCommodule:
+    """Data class for Commodule (wallbox/EV charger) device."""
+
+    device: str | None
+    firmware: list | None
+    notifications: list | None
+    charge_points: list | None
+    eth0_state: dict | None
