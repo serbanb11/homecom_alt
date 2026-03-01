@@ -173,6 +173,7 @@ BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY: Final[str] = "/demand/indoorAirQua
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY: Final[str] = "/demand/relativeHumidity"
 
 BOSCHCOM_ENDPOINT_ZONES: Final[str] = "/resource/zones"
+BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL: Final[str] = "/temperatureActual"
 BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING: Final[str] = "/manualTemperatureHeating"
 BOSCHCOM_ENDPOINT_ZONE_USER_MODE: Final[str] = "/userMode"
 BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING: Final[str] = "/temperatureHeatingSetpoint"
