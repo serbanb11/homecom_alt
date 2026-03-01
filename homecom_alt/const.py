@@ -175,6 +175,8 @@ BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY: Final[str] = "/demand/relativeHum
 BOSCHCOM_ENDPOINT_ZONES: Final[str] = "/resource/zones"
 BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL: Final[str] = "/temperatureActual"
 BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING: Final[str] = "/manualTemperatureHeating"
+BOSCHCOM_ENDPOINT_ZONE_USER_MODE: Final[str] = "/userMode"
+BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING: Final[str] = "/temperatureHeatingSetpoint"
 
 BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY: Final[str] = "/maxSupply"
 BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY: Final[str] = "/minSupply"

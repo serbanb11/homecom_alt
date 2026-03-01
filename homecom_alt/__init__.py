@@ -6,7 +6,7 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 import jwt
@@ -140,7 +140,7 @@ from .const import (
     OAUTH_PARAMS,
     OAUTH_PARAMS_BUDERUS,
     OAUTH_REFRESH_PARAMS,
-    URLENCODED,
+    URLENCODED, BOSCHCOM_ENDPOINT_ZONE_USER_MODE, BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
 )
 from .exceptions import (
     ApiError,
@@ -1804,6 +1804,39 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_zone_user_mode(self, device_id: str, zone_id: str) -> Any:
+        """Get zone user mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_USER_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_set_zone_user_mode(
+        self, device_id: str, zone_id: str, mode: Literal["manual", "clock"]
+    ) -> None:
+        """Set zone user mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_USER_MODE,
+            {"value": mode},
+            1,
+        )
+
     async def async_get_zone_temp_actual(self, device_id: str, zone_id: str) -> Any:
         """Get zone actual temperature."""
         await self.get_token()
@@ -1816,6 +1849,21 @@ class HomeComK40(HomeComAlt):
             + "/"
             + zone_id
             + BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
+        )
+        return await self._to_data(response)
+
+    async def async_get_zone_temp_setpoint(self, device_id: str, zone_id: str) -> Any:
+        """Get zone temperature setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
         )
         return await self._to_data(response)
 
@@ -2426,6 +2474,10 @@ class HomeComK40(HomeComAlt):
         if zones_references:
             for ref in zones_references:
                 zone_id = ref["id"].split("/")[-1]
+                ref["userMode"] = await self.async_get_zone_user_mode(device_id, zone_id)
+                ref["tempSetpoint"] = await self.async_get_zone_temp_setpoint(
+                    device_id, zone_id
+                )
                 ref["temperatureActual"] = await self.async_get_zone_temp_actual(
                     device_id, zone_id
                 )
