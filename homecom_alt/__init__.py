@@ -2474,6 +2474,10 @@ class HomeComK40(HomeComAlt):
         if zones_references:
             for ref in zones_references:
                 zone_id = ref["id"].split("/")[-1]
+                ref["userMode"] = await self.async_get_zone_user_mode(device_id, zone_id)
+                ref["tempSetpoint"] = await self.async_get_zone_temp_setpoint(
+                    device_id, zone_id
+                )
                 ref["temperatureActual"] = await self.async_get_zone_temp_actual(
                     device_id, zone_id
                 )
