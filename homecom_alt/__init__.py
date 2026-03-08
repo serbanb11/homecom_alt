@@ -59,6 +59,8 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
+    BOSCHCOM_ENDPOINT_ENERGY_HISTORY_ENTRIES,
+    BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY,
     BOSCHCOM_ENDPOINT_ETH0_STATE,
     BOSCHCOM_ENDPOINT_FAN_SPEED,
     BOSCHCOM_ENDPOINT_FIRMWARE,
@@ -2195,15 +2197,71 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_energy_history(self, device_id: str) -> Any:
+    async def async_get_energy_history(
+        self, device_id: str, entry: int | None = None
+    ) -> Any:
         """Get energy history."""
+        await self.get_token()
+        url = (
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY
+        )
+        if entry is not None:
+            url += f"?entry={entry}"
+        response = await self._async_http_request("get", url)
+        return await self._to_data(response)
+
+    async def async_get_energy_history_hourly(self, device_id: str) -> Any:
+        """Get complete hourly energy history by following paginated next tokens."""
+        await self.get_token()
+
+        all_entries: list[Any] = []
+        first_page: dict[str, Any] | None = None
+        next_cursor: int | str = 0
+
+        while True:
+            url = (
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
+                + f"?next={next_cursor}"
+            )
+            print(f"Fetching energy history hourly with URL: {url}")
+            response = await self._async_http_request("get", url)
+            page: dict[str, Any] | None = await self._to_data(response)
+            if not page:
+                break
+
+            if first_page is None:
+                first_page = page
+
+            for value_item in page.get("value", []):
+                all_entries.extend(value_item.get("entries", []))
+            print(page)
+            next_cursor = page.get("value", [{}])[0].get("next")
+            print(f"Fetched {len(all_entries)} entries so far, next cursor: {next_cursor}")
+            if next_cursor is None:
+                break
+
+        if first_page is None:
+            return None
+
+        result = dict(first_page)
+        result["value"] = [{"entries": all_entries}]
+        return result
+
+    async def async_get_energy_history_entries(self, device_id: str) -> Any:
+        """Get the total number of available hourly energy history entries."""
         await self.get_token()
         response = await self._async_http_request(
             "get",
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
-            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
+            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_ENTRIES,
         )
         return await self._to_data(response)
 
@@ -2491,6 +2549,7 @@ class HomeComK40(HomeComAlt):
         heat_sources["flameIndication"] = flame_indication or {}
 
         energy_history = await self.async_get_energy_history(device_id)
+        hourly_energy_history = await self.async_get_energy_history_hourly(device_id)
         indoor_humidity = await self.async_get_indoor_humidity(device_id)
 
         devices = await self.async_get_devices_list(device_id)
@@ -2517,6 +2576,7 @@ class HomeComK40(HomeComAlt):
             zones=zones_references,
             flame_indication=flame_indication,
             energy_history=energy_history,
+            hourly_energy_history=hourly_energy_history,
             indoor_humidity=indoor_humidity,
             devices=devices_references,
         )

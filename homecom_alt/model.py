@@ -54,6 +54,7 @@ class BHCDeviceK40:
     zones: list | None
     flame_indication: list | None
     energy_history: list | None
+    hourly_energy_history: list | None
     indoor_humidity: list | None
     devices: list | None
 
