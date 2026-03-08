@@ -2230,7 +2230,6 @@ class HomeComK40(HomeComAlt):
                 + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
                 + f"?next={next_cursor}"
             )
-            print(f"Fetching energy history hourly with URL: {url}")
             response = await self._async_http_request("get", url)
             page: dict[str, Any] | None = await self._to_data(response)
             if not page:
@@ -2241,9 +2240,7 @@ class HomeComK40(HomeComAlt):
 
             for value_item in page.get("value", []):
                 all_entries.extend(value_item.get("entries", []))
-            print(page)
             next_cursor = page.get("value", [{}])[0].get("next")
-            print(f"Fetched {len(all_entries)} entries so far, next cursor: {next_cursor}")
             if next_cursor is None:
                 break
 
