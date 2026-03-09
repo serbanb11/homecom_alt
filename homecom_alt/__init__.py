@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import UTC, datetime, timedelta
@@ -142,7 +143,7 @@ from .const import (
     OAUTH_PARAMS,
     OAUTH_PARAMS_BUDERUS,
     OAUTH_REFRESH_PARAMS,
-    URLENCODED, BOSCHCOM_ENDPOINT_ZONE_USER_MODE, BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
+    URLENCODED, BOSCHCOM_ENDPOINT_ZONE_USER_MODE, BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING, MAX_CONCURRENT,
 )
 from .exceptions import (
     ApiError,
@@ -2327,243 +2328,197 @@ class HomeComK40(HomeComAlt):
         )
 
     async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0912, PLR0915
-        """Retrieve data from the device."""
+        """Retrieve data from the device concurrently with limited concurrency."""
         await self.get_token()
 
-        notifications = await self.async_get_notifications(device_id)
-        dhw_circuits = await self.async_get_dhw(device_id)
-        references = dhw_circuits.get("references", [])
-        if references:
-            for ref in references:
+        semaphore = asyncio.BoundedSemaphore(MAX_CONCURRENT)
+
+        async def limited_call(coro):
+            async with semaphore:
+                return await coro
+
+        today = datetime.now(tz=UTC)
+
+        notifications_task = asyncio.create_task(limited_call(self.async_get_notifications(device_id)))
+        dhw_task = asyncio.create_task(limited_call(self.async_get_dhw(device_id)))
+        heating_task = asyncio.create_task(limited_call(self.async_get_hc(device_id)))
+        holiday_task = asyncio.create_task(limited_call(self.async_get_holiday_mode(device_id)))
+        away_task = asyncio.create_task(limited_call(self.async_get_away_mode(device_id)))
+        power_task = asyncio.create_task(limited_call(self.async_get_power_limitation(device_id)))
+        outdoor_task = asyncio.create_task(limited_call(self.async_get_outdoor_temp(device_id)))
+        ventilation_task = asyncio.create_task(limited_call(self.async_get_ventilation_zones(device_id)))
+        zones_task = asyncio.create_task(limited_call(self.async_get_zones(device_id)))
+        flame_task = asyncio.create_task(limited_call(self.async_get_hs_flame_indication(device_id)))
+        energy_task = asyncio.create_task(limited_call(self.async_get_energy_history(device_id)))
+        hourly_energy_task = asyncio.create_task(limited_call(self.async_get_energy_history_hourly(device_id)))
+        humidity_task = asyncio.create_task(limited_call(self.async_get_indoor_humidity(device_id)))
+        devices_task = asyncio.create_task(limited_call(self.async_get_devices_list(device_id)))
+
+        heat_sources_tasks = {
+            "pumpType": limited_call(self.async_get_hs_pump_type(device_id)),
+            "starts": limited_call(self.async_get_hs_starts(device_id)),
+            "returnTemperature": limited_call(self.async_get_hs_return_temp(device_id)),
+            "actualSupplyTemperature": limited_call(self.async_get_hs_supply_temp(device_id)),
+            "actualModulation": limited_call(self.async_get_hs_modulation(device_id)),
+            "collectorInflowTemp": limited_call(self.async_get_hs_brine_inflow_temp(device_id)),
+            "collectorOutflowTemp": limited_call(self.async_get_hs_brine_outflow_temp(device_id)),
+            "actualHeatDemand": limited_call(self.async_get_hs_heat_demand(device_id)),
+            "totalWorkingTime": limited_call(self.async_get_hs_working_time(device_id)),
+            "consumption": limited_call(self.async_get_hs_total_consumption(device_id)),
+            "systemPressure": limited_call(self.async_get_hs_system_pressure(device_id)),
+        }
+
+        (
+            notifications, dhw_circuits, heating_circuits, holiday_mode, away_mode,
+            power_limitation, outdoor_temp, ventilation, zones, flame_indication,
+            energy_history, hourly_energy_history, indoor_humidity, devices
+        ) = await asyncio.gather(
+            notifications_task, dhw_task, heating_task,
+            holiday_task, away_task, power_task, outdoor_task,
+            ventilation_task, zones_task, flame_task, energy_task, hourly_energy_task,
+            humidity_task, devices_task
+        )
+
+        heat_sources = {k: await v or {} for k, v in heat_sources_tasks.items()}
+
+        heat_sources["dayconsumption"], heat_sources["monthconsumption"], heat_sources[
+            "yearconsumption"] = await asyncio.gather(
+            limited_call(self.async_get_consumption(device_id, "total", today.strftime("%Y-%m-%d"))),
+            limited_call(self.async_get_consumption(device_id, "total", today.strftime("%Y-%m"))),
+            limited_call(self.async_get_consumption(device_id, "total", today.strftime("%Y"))),
+        )
+
+        dhw_refs = dhw_circuits.get("references", [])
+        if dhw_refs:
+            async def populate_dhw(ref):
                 dhw_id = ref["id"].split("/")[-1]
-                ref["operationMode"] = await self.async_get_dhw_operation_mode(
-                    device_id, dhw_id
+                ref["operationMode"], ref["actualTemp"], ref["charge"], ref["chargeRemainingTime"], \
+                    ref["currentTemperatureLevel"], ref["singleChargeSetpoint"] = await asyncio.gather(
+                    limited_call(self.async_get_dhw_operation_mode(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_charge(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_charge_remaining_time(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_current_temp_level(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_charge_setpoint(device_id, dhw_id)),
                 )
-                ref["actualTemp"] = await self.async_get_dhw_actual_temp(
-                    device_id, dhw_id
-                )
-                ref["charge"] = await self.async_get_dhw_charge(device_id, dhw_id)
-                ref[
-                    "chargeRemainingTime"
-                ] = await self.async_get_dhw_charge_remaining_time(device_id, dhw_id)
-                ref[
-                    "currentTemperatureLevel"
-                ] = await self.async_get_dhw_current_temp_level(device_id, dhw_id)
-                ref["singleChargeSetpoint"] = await self.async_get_dhw_charge_setpoint(
-                    device_id, dhw_id
-                )
-                ref["tempLevel"] = {}
+
                 ctl = ref.get("currentTemperatureLevel") or {}
-                for value in ctl.get("allowedValues", []):
-                    if value != "off":
-                        ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
-                            device_id, dhw_id, value
-                        )
-                ref["dayconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y-%m-%d")
+                temp_tasks = [
+                    limited_call(self.async_get_dhw_temp_level(device_id, dhw_id, value))
+                    for value in ctl.get("allowedValues", []) if value != "off"
+                ]
+                if temp_tasks:
+                    temp_results = await asyncio.gather(*temp_tasks)
+                    for value, res in zip([v for v in ctl.get("allowedValues", []) if v != "off"], temp_results):
+                        ref["tempLevel"][value] = res
+
+                ref["dayconsumption"], ref["monthconsumption"], ref["yearconsumption"] = await asyncio.gather(
+                    limited_call(self.async_get_consumption(device_id, "dhw", today.strftime("%Y-%m-%d"))),
+                    limited_call(self.async_get_consumption(device_id, "dhw", today.strftime("%Y-%m"))),
+                    limited_call(self.async_get_consumption(device_id, "dhw", today.strftime("%Y"))),
                 )
-                ref["monthconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y-%m")
-                )
-                ref["yearconsumption"] = await self.async_get_consumption(
-                    device_id, "dhw", datetime.now(tz=UTC).strftime("%Y")
-                )
+
+            await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
         else:
             dhw_circuits["references"] = {}
 
-        heating_circuits = await self.async_get_hc(device_id)
-        references = heating_circuits.get("references", [])
-        if references:
-            for ref in references:
+        hc_refs = heating_circuits.get("references", [])
+        if hc_refs:
+            async def populate_hc(ref):
                 hc_id = ref["id"].split("/")[-1]
-                ref["operationMode"] = await self.async_get_hc_operation_mode(
-                    device_id, hc_id
+                (
+                    ref["operationMode"], ref["currentSuWiMode"], ref["heatCoolMode"],
+                    ref["roomTemp"], ref["actualHumidity"], ref["manualRoomSetpoint"],
+                    ref["currentRoomSetpoint"], ref["coolingRoomTempSetpoint"], ref["maxSupply"],
+                    ref["minSupply"], ref["heatCurveMax"], ref["heatCurveMin"],
+                    ref["supplyTemperatureSetpoint"], ref["nightSwitchMode"], ref["control"],
+                    ref["nightThreshold"], ref["roomInfluence"]
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_hc_operation_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_suwi_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_heatcool_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_room_temp(device_id, hc_id)),
+                    limited_call(self.async_get_hc_actual_humidity(device_id, hc_id)),
+                    limited_call(self.async_get_hc_manual_room_setpoint(device_id, hc_id)),
+                    limited_call(self.async_get_hc_current_room_setpoint(device_id, hc_id)),
+                    limited_call(self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)),
+                    limited_call(self.async_get_hc_max_supply(device_id, hc_id)),
+                    limited_call(self.async_get_hc_min_supply(device_id, hc_id)),
+                    limited_call(self.async_get_hc_heat_curve_max(device_id, hc_id)),
+                    limited_call(self.async_get_hc_heat_curve_min(device_id, hc_id)),
+                    limited_call(self.async_get_hc_supply_temp_setpoint(device_id, hc_id)),
+                    limited_call(self.async_get_hc_night_switch_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_control(device_id, hc_id)),
+                    limited_call(self.async_get_hc_night_threshold(device_id, hc_id)),
+                    limited_call(self.async_get_hc_room_influence(device_id, hc_id)),
                 )
-                ref["currentSuWiMode"] = await self.async_get_hc_suwi_mode(
-                    device_id, hc_id
+
+                ref["dayconsumption"], ref["monthconsumption"], ref["yearconsumption"] = await asyncio.gather(
+                    limited_call(self.async_get_consumption(device_id, "ch", today.strftime("%Y-%m-%d"))),
+                    limited_call(self.async_get_consumption(device_id, "ch", today.strftime("%Y-%m"))),
+                    limited_call(self.async_get_consumption(device_id, "ch", today.strftime("%Y"))),
                 )
-                ref["heatCoolMode"] = await self.async_get_hc_heatcool_mode(
-                    device_id, hc_id
-                )
-                ref["roomTemp"] = await self.async_get_hc_room_temp(device_id, hc_id)
-                ref["actualHumidity"] = await self.async_get_hc_actual_humidity(
-                    device_id, hc_id
-                )
-                ref[
-                    "manualRoomSetpoint"
-                ] = await self.async_get_hc_manual_room_setpoint(device_id, hc_id)
-                ref[
-                    "currentRoomSetpoint"
-                ] = await self.async_get_hc_current_room_setpoint(device_id, hc_id)
-                ref[
-                    "coolingRoomTempSetpoint"
-                ] = await self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
-                ref["maxSupply"] = await self.async_get_hc_max_supply(device_id, hc_id)
-                ref["minSupply"] = await self.async_get_hc_min_supply(device_id, hc_id)
-                ref["heatCurveMax"] = await self.async_get_hc_heat_curve_max(
-                    device_id, hc_id
-                )
-                ref["heatCurveMin"] = await self.async_get_hc_heat_curve_min(
-                    device_id, hc_id
-                )
-                ref[
-                    "supplyTemperatureSetpoint"
-                ] = await self.async_get_hc_supply_temp_setpoint(device_id, hc_id)
-                ref["nightSwitchMode"] = await self.async_get_hc_night_switch_mode(
-                    device_id, hc_id
-                )
-                ref["control"] = await self.async_get_hc_control(device_id, hc_id)
-                ref["nightThreshold"] = await self.async_get_hc_night_threshold(
-                    device_id, hc_id
-                )
-                ref["roomInfluence"] = await self.async_get_hc_room_influence(
-                    device_id, hc_id
-                )
-                ref["dayconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y-%m-%d")
-                )
-                ref["monthconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y-%m")
-                )
-                ref["yearconsumption"] = await self.async_get_consumption(
-                    device_id, "ch", datetime.now(tz=UTC).strftime("%Y")
-                )
+
+            await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
         else:
             heating_circuits["references"] = {}
 
-        heat_sources = {}
-        heat_sources["pumpType"] = await self.async_get_hs_pump_type(device_id) or {}
-        heat_sources["starts"] = await self.async_get_hs_starts(device_id) or {}
-        heat_sources["returnTemperature"] = (
-            await self.async_get_hs_return_temp(device_id) or {}
-        )
-        heat_sources["actualSupplyTemperature"] = (
-            await self.async_get_hs_supply_temp(device_id) or {}
-        )
-        heat_sources["actualModulation"] = (
-            await self.async_get_hs_modulation(device_id) or {}
-        )
-        heat_sources["collectorInflowTemp"] = (
-            await self.async_get_hs_brine_inflow_temp(device_id) or {}
-        )
-        heat_sources["collectorOutflowTemp"] = (
-            await self.async_get_hs_brine_outflow_temp(device_id) or {}
-        )
-        heat_sources["actualHeatDemand"] = (
-            await self.async_get_hs_heat_demand(device_id) or {}
-        )
-        heat_sources["totalWorkingTime"] = (
-            await self.async_get_hs_working_time(device_id) or {}
-        )
-        # It should actually be called totalconsumption, but for
-        # compatibility reasons it remains consumption.
-        heat_sources["consumption"] = (
-            await self.async_get_hs_total_consumption(device_id) or {}
-        )
-        heat_sources["dayconsumption"] = await self.async_get_consumption(
-            device_id, "total", datetime.now(tz=UTC).strftime("%Y-%m-%d")
-        )
-        heat_sources["monthconsumption"] = await self.async_get_consumption(
-            device_id, "total", datetime.now(tz=UTC).strftime("%Y-%m")
-        )
-        heat_sources["yearconsumption"] = await self.async_get_consumption(
-            device_id, "total", datetime.now(tz=UTC).strftime("%Y")
-        )
-        heat_sources["systemPressure"] = (
-            await self.async_get_hs_system_pressure(device_id) or {}
-        )
-        holiday_mode = await self.async_get_holiday_mode(device_id)
-        away_mode = await self.async_get_away_mode(device_id)
-        power_limitation = await self.async_get_power_limitation(device_id)
-        outdoor_temp = await self.async_get_outdoor_temp(device_id)
-
-        ventilation = await self.async_get_ventilation_zones(device_id)
-        ventilation_references = (ventilation or {}).get("references", [])
-        if ventilation_references:
-            for ref in ventilation_references:
+        vent_refs = (ventilation or {}).get("references", [])
+        if vent_refs:
+            async def populate_vent(ref):
                 zone_id = ref["id"].split("/")[-1]
-                ref[
-                    "exhaustFanLevel"
-                ] = await self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
-                ref["maxIndoorAirQuality"] = await self.async_get_ventilation_quality(
-                    device_id, zone_id
+                (
+                    ref["exhaustFanLevel"], ref["maxIndoorAirQuality"], ref["maxRelativeHumidity"],
+                    ref["operationMode"], ref["exhaustTemp"], ref["extractTemp"],
+                    ref["internalAirQuality"], ref["internalHumidity"], ref["outdoorTemp"],
+                    ref["supplyTemp"], ref["summerBypassEnable"], ref["summerBypassDuration"],
+                    ref["demandindoorAirQuality"], ref["demandrelativeHumidity"]
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_quality(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_humidity(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_mode(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_exhaust_temp(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_extract_temp(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_internal_quality(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_internal_humidity(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_outdoor_temp(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_supply_temp(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_summer_enable(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_summer_duration(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_demand_quality(device_id, zone_id)),
+                    limited_call(self.async_get_ventilation_demand_humidity(device_id, zone_id)),
                 )
-                ref["maxRelativeHumidity"] = await self.async_get_ventilation_humidity(
-                    device_id, zone_id
-                )
-                ref["operationMode"] = await self.async_get_ventilation_mode(
-                    device_id, zone_id
-                )
-                ref["exhaustTemp"] = await self.async_get_ventilation_exhaust_temp(
-                    device_id, zone_id
-                )
-                ref["extractTemp"] = await self.async_get_ventilation_extract_temp(
-                    device_id, zone_id
-                )
-                ref[
-                    "internalAirQuality"
-                ] = await self.async_get_ventilation_internal_quality(
-                    device_id, zone_id
-                )
-                ref[
-                    "internalHumidity"
-                ] = await self.async_get_ventilation_internal_humidity(
-                    device_id, zone_id
-                )
-                ref["outdoorTemp"] = await self.async_get_ventilation_outdoor_temp(
-                    device_id, zone_id
-                )
-                ref["supplyTemp"] = await self.async_get_ventilation_supply_temp(
-                    device_id, zone_id
-                )
-                ref[
-                    "summerBypassEnable"
-                ] = await self.async_get_ventilation_summer_enable(device_id, zone_id)
-                ref[
-                    "summerBypassDuration"
-                ] = await self.async_get_ventilation_summer_duration(device_id, zone_id)
-                ref[
-                    "demandindoorAirQuality"
-                ] = await self.async_get_ventilation_demand_quality(device_id, zone_id)
-                ref[
-                    "demandrelativeHumidity"
-                ] = await self.async_get_ventilation_demand_humidity(device_id, zone_id)
-        else:
-            ventilation_references = {}
 
-        zones = await self.async_get_zones(device_id)
-        zones_references = (zones or {}).get("references", [])
-        if zones_references:
-            for ref in zones_references:
+            await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))
+        else:
+            vent_refs = {}
+
+        zone_refs = (zones or {}).get("references", [])
+        if zone_refs:
+            async def populate_zone(ref):
                 zone_id = ref["id"].split("/")[-1]
-                ref["userMode"] = await self.async_get_zone_user_mode(device_id, zone_id)
-                ref["tempSetpoint"] = await self.async_get_zone_temp_setpoint(
-                    device_id, zone_id
+                ref["userMode"], ref["tempSetpoint"], ref["temperatureActual"], ref[
+                    "manualTemperatureHeating"] = await asyncio.gather(
+                    limited_call(self.async_get_zone_user_mode(device_id, zone_id)),
+                    limited_call(self.async_get_zone_temp_setpoint(device_id, zone_id)),
+                    limited_call(self.async_get_zone_temp_actual(device_id, zone_id)),
+                    limited_call(self.async_get_zone_manual_temp_heating(device_id, zone_id)),
                 )
-                ref["temperatureActual"] = await self.async_get_zone_temp_actual(
-                    device_id, zone_id
-                )
-                ref[
-                    "manualTemperatureHeating"
-                ] = await self.async_get_zone_manual_temp_heating(device_id, zone_id)
+
+            await asyncio.gather(*(populate_zone(ref) for ref in zone_refs))
         else:
-            zones_references = {}
+            zone_refs = {}
 
-        flame_indication = await self.async_get_hs_flame_indication(device_id)
-        heat_sources["flameIndication"] = flame_indication or {}
-
-        energy_history = await self.async_get_energy_history(device_id)
-        hourly_energy_history = await self.async_get_energy_history_hourly(device_id)
-        indoor_humidity = await self.async_get_indoor_humidity(device_id)
-
-        devices = await self.async_get_devices_list(device_id)
-        devices_references = (devices or {}).get("references", [])
-        if devices_references:
-            for ref in devices_references:
+        device_refs = (devices or {}).get("references", [])
+        if device_refs:
+            async def populate_device(ref):
                 dev_id = ref["id"].split("/")[-1]
-                ref["childLock"] = await self.async_get_child_lock(device_id, dev_id)
+                ref["childLock"] = await limited_call(self.async_get_child_lock(device_id, dev_id))
+
+            await asyncio.gather(*(populate_device(ref) for ref in device_refs))
         else:
-            devices_references = {}
+            device_refs = {}
 
         return BHCDeviceK40(
             device=device_id,
@@ -2574,15 +2529,15 @@ class HomeComK40(HomeComAlt):
             power_limitation=power_limitation,
             outdoor_temp=outdoor_temp,
             heat_sources=heat_sources,
-            dhw_circuits=dhw_circuits["references"],
-            heating_circuits=heating_circuits["references"],
-            ventilation=ventilation_references,
-            zones=zones_references,
-            flame_indication=flame_indication,
+            dhw_circuits=dhw_circuits.get("references", {}),
+            heating_circuits=heating_circuits.get("references", {}),
+            ventilation=vent_refs,
+            zones=zone_refs,
+            flame_indication=flame_indication or {},
             energy_history=energy_history,
             hourly_energy_history=hourly_energy_history,
             indoor_humidity=indoor_humidity,
-            devices=devices_references,
+            devices=device_refs,
         )
 
 

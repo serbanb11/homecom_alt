@@ -231,3 +231,5 @@ DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=15)
 
 URLENCODED: Final[int] = 2
 JSON: Final[int] = 1
+
+MAX_CONCURRENT = 10
