@@ -509,7 +509,7 @@ class HomeComRac(HomeComAlt):
         return BHCDeviceRac(
             device=device_id,
             firmware=[],
-            notifications=notifications.get("values", []),
+            notifications=((notifications or {}).get("values") or []),
             stardard_functions=stardard_functions["references"],
             advanced_functions=advanced_functions["references"],
             switch_programs=switch_programs["references"],
@@ -2568,7 +2568,7 @@ class HomeComK40(HomeComAlt):
         return BHCDeviceK40(
             device=device_id,
             firmware=[],
-            notifications=notifications.get("values", []),
+            notifications=((notifications or {}).get("values") or []),
             holiday_mode=holiday_mode,
             away_mode=away_mode,
             power_limitation=power_limitation,
@@ -2827,7 +2827,7 @@ class HomeComWddw2(HomeComAlt):
         return BHCDeviceWddw2(
             device=device_id,
             firmware=[],
-            notifications=notifications.get("values", []),
+            notifications=((notifications or {}).get("values") or []),
             dhw_circuits=dhw_circuits["references"],
         )
 
@@ -3093,7 +3093,7 @@ class HomeComCommodule(HomeComAlt):
         return BHCDeviceCommodule(
             device=device_id,
             firmware=[],
-            notifications=notifications.get("values", []),
+            notifications=((notifications or {}).get("values") or []),
             charge_points=charge_points_data["references"],
             eth0_state=eth0_state,
         )
