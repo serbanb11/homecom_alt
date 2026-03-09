@@ -2200,7 +2200,7 @@ class HomeComK40(HomeComAlt):
     async def async_get_energy_history(
         self, device_id: str, entry: int | None = None
     ) -> Any:
-        """Get energy history."""
+        """Get energy history of the last 24 hours. If entry is not provided, it will fetch the latest entry based on the total number of available entries."""
         DEFAULT_ENTRIES = 1
         INDEX_OFFSET = 1
 
