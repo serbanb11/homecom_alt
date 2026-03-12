@@ -1805,7 +1805,16 @@ class HomeComK40(HomeComAlt):
             + device_id
             + BOSCHCOM_ENDPOINT_ZONES,
         )
-        return await self._to_data(response)
+        # remove deviceTypeAllowed and list from value
+        response_data = await self._to_data(response)
+        references = response_data.get("references", [])
+        response_data["references"] = [
+            ref for ref in references
+            if ref.get("id") not in ("/zones/deviceTypeAllowed", "/zones/list")
+        ]
+        return response_data
+
+
 
     async def async_get_zone_user_mode(self, device_id: str, zone_id: str) -> Any:
         """Get zone user mode."""
