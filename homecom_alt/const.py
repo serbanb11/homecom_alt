@@ -211,6 +211,8 @@ BOSCHCOM_ENDPOINT_CP_CONF_PRICE: Final[str] = "/conf/price"
 BOSCHCOM_ENDPOINT_CP_CONF_LOCKED: Final[str] = "/conf/locked"
 BOSCHCOM_ENDPOINT_CP_CONF_AUTH: Final[str] = "/conf/auth"
 BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE: Final[str] = "/conf/rfid/secure"
+BOSCHCOM_ENDPOINT_CP_CMD_START: Final[str] = "/cmd/start"
+BOSCHCOM_ENDPOINT_CP_CMD_PAUSE: Final[str] = "/cmd/pause"
 BOSCHCOM_ENDPOINT_ETH0_STATE: Final[str] = "/resource/gateway/eth0/state"
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
@@ -232,4 +234,4 @@ DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=15)
 URLENCODED: Final[int] = 2
 JSON: Final[int] = 1
 
-MAX_CONCURRENT = 10
+MAX_CONCURRENT: Final[int] = 10

@@ -52,7 +52,7 @@ class BHCDeviceK40:
     heating_circuits: list | None
     ventilation: list | None
     zones: list | None
-    flame_indication: list | None
+    flame_indication: dict | None
     energy_history: list | None
     hourly_energy_history: list | None
     indoor_humidity: list | None
