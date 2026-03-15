@@ -15,6 +15,7 @@ from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
     ClientSession,
+    ContentTypeError,
 )
 from tenacity import (
     after_log,
@@ -250,8 +251,10 @@ class HomeComAlt:
             if error.status in (
                 HTTPStatus.NOT_FOUND.value,  # 404
                 HTTPStatus.FORBIDDEN.value,  # 403
+                HTTPStatus.BAD_GATEWAY.value,  # 502
+                HTTPStatus.GATEWAY_TIMEOUT.value,  # 504
             ):
-                # This url is not support for this type of device, just ignore it
+                _LOGGER.warning("Endpoint %s returned %s", url, error.status)
                 return {}
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
@@ -271,8 +274,9 @@ class HomeComAlt:
             return None
         try:
             return await response.json()
-        except ValueError as error:
-            raise InvalidSensorDataError("Invalid devices data") from error
+        except (ValueError, ContentTypeError) as error:
+            _LOGGER.warning("Failed to parse response as JSON: %s", error)
+            return None
 
     @retry(
         retry=retry_if_exception_type(NotRespondingError),
@@ -514,9 +518,9 @@ class HomeComRac(HomeComAlt):
             device=device_id,
             firmware=[],
             notifications=((notifications or {}).get("values") or []),
-            stardard_functions=stardard_functions["references"],
-            advanced_functions=advanced_functions["references"],
-            switch_programs=switch_programs["references"],
+            stardard_functions=(stardard_functions or {}).get("references", []),
+            advanced_functions=(advanced_functions or {}).get("references", []),
+            switch_programs=(switch_programs or {}).get("references", []),
         )
 
     async def async_control(self, device_id: str, control: str) -> None:
@@ -2483,6 +2487,7 @@ class HomeComK40(HomeComAlt):
             ),
         )
 
+        dhw_circuits = dhw_circuits or {}
         dhw_refs = dhw_circuits.get("references", [])
         if dhw_refs:
 
@@ -2552,6 +2557,7 @@ class HomeComK40(HomeComAlt):
         else:
             dhw_circuits["references"] = {}
 
+        heating_circuits = heating_circuits or {}
         hc_refs = heating_circuits.get("references", [])
         if hc_refs:
 
@@ -2955,6 +2961,7 @@ class HomeComWddw2(HomeComAlt):
 
         notifications = await self.async_get_notifications(device_id)
         dhw_circuits = await self.async_get_dhw(device_id)
+        dhw_circuits = dhw_circuits or {}
         references = dhw_circuits.get("references", [])
         if references:
             for ref in references:
@@ -2995,7 +3002,7 @@ class HomeComWddw2(HomeComAlt):
             device=device_id,
             firmware=[],
             notifications=((notifications or {}).get("values") or []),
-            dhw_circuits=dhw_circuits["references"],
+            dhw_circuits=dhw_circuits.get("references", {}),
         )
 
 
@@ -3233,6 +3240,7 @@ class HomeComCommodule(HomeComAlt):
         notifications = await self.async_get_notifications(device_id)
         eth0_state = await self.async_get_eth0_state(device_id)
         charge_points_data = await self.async_get_charge_points(device_id)
+        charge_points_data = charge_points_data or {}
         references = charge_points_data.get("references", [])
         if references:
             for ref in references:
@@ -3261,6 +3269,6 @@ class HomeComCommodule(HomeComAlt):
             device=device_id,
             firmware=[],
             notifications=((notifications or {}).get("values") or []),
-            charge_points=charge_points_data["references"],
+            charge_points=charge_points_data.get("references", {}),
             eth0_state=eth0_state,
         )

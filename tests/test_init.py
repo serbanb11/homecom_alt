@@ -8,7 +8,12 @@ from urllib.parse import urlencode
 
 import jwt
 import pytest
-from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
+from aiohttp import (
+    ClientConnectorError,
+    ClientResponseError,
+    ClientSession,
+    ContentTypeError,
+)
 
 from homecom_alt import (
     ApiError,
@@ -20,7 +25,6 @@ from homecom_alt import (
     HomeComK40,
     HomeComRac,
     HomeComWddw2,
-    InvalidSensorDataError,
     NotRespondingError,
 )
 from homecom_alt.const import (
@@ -288,13 +292,13 @@ async def test_to_data_valid_json() -> None:
 
 @pytest.mark.asyncio
 async def test_to_data_value_error() -> None:
-    """ValueError from json() → InvalidSensorDataError."""
+    """ValueError from json() → None (graceful degradation)."""
     resp = AsyncMock()
     resp.json = AsyncMock(side_effect=ValueError("bad"))
     # resp is truthy
     resp.__bool__ = lambda self: True  # noqa: ARG005
-    with pytest.raises(InvalidSensorDataError):
-        await HomeComAlt._to_data(resp)
+    result = await HomeComAlt._to_data(resp)
+    assert result is None
 
 
 # ===========================================================================
@@ -2450,3 +2454,161 @@ async def test_connection_options_brand_default() -> None:
     """ConnectionOptions defaults brand to 'bosch'."""
     opts = ConnectionOptions()
     assert opts.brand == "bosch"
+
+
+# ===========================================================================
+# Resilient API error handling
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_async_http_request_bad_gateway_returns_empty_dict() -> None:
+    """Test that HTTP 502 returns empty dict (transient gateway error)."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.BAD_GATEWAY
+        )
+        response = await bhc._async_http_request("get", "http://test.com/api")
+        assert response == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_async_http_request_gateway_timeout_returns_empty_dict() -> None:
+    """Test that HTTP 504 returns empty dict (transient gateway timeout)."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.GATEWAY_TIMEOUT
+        )
+        response = await bhc._async_http_request("get", "http://test.com/api")
+        assert response == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_to_data_content_type_error_returns_none() -> None:
+    """ContentTypeError from json() → None (not a crash)."""
+    resp = AsyncMock()
+    resp.json = AsyncMock(
+        side_effect=ContentTypeError(MagicMock(), (), message="text/html")
+    )
+    resp.__bool__ = lambda self: True  # noqa: ARG005
+    result = await HomeComAlt._to_data(resp)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_rac_async_update_none_endpoints() -> None:
+    """RAC async_update completes when endpoints return None."""
+    session = ClientSession()
+    rac = _make_rac(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response(None)
+        if "standardFunctions" in url:
+            return _mock_json_response(None)
+        if "advancedFunctions" in url:
+            return _mock_json_response(None)
+        if "switchPrograms/list" in url:
+            return _mock_json_response(None)
+        return _mock_json_response({})
+
+    with patch.object(rac, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await rac.async_update(DEVICE_ID)
+
+    assert result.device == DEVICE_ID
+    assert result.stardard_functions == []
+    assert result.advanced_functions == []
+    assert result.switch_programs == []
+    assert result.notifications == []
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_none_dhw_and_hc() -> None:
+    """K40 async_update completes when DHW and HC return None."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if url.endswith("/resource/dhwCircuits"):
+            return _mock_json_response(None)
+        if url.endswith("/resource/heatingCircuits"):
+            return _mock_json_response(None)
+        if "ventilation" in url:
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/zones"):
+            return _mock_json_response({"references": []})
+        if url.endswith("/resource/devices"):
+            return _mock_json_response({"references": []})
+        if "bulk" in url:
+            return _mock_json_response(
+                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
+            )
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.dhw_circuits == {}
+    assert result.heating_circuits == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_async_update_none_dhw() -> None:
+    """Wddw2 async_update completes when async_get_dhw returns None."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if url.endswith("/resource/dhwCircuits"):
+            return _mock_json_response(None)
+        return _mock_json_response({})
+
+    with patch.object(wddw2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await wddw2.async_update(DEVICE_ID)
+
+    assert result.dhw_circuits == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_async_update_none_charge_points() -> None:
+    """Commodule async_update completes when async_get_charge_points returns None."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if "eth0/state" in url:
+            return _mock_json_response({"value": "disconnected"})
+        if url.endswith("/resource/rest/v1"):
+            return _mock_json_response(None)
+        return _mock_json_response({})
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await cm.async_update(DEVICE_ID)
+
+    assert result.charge_points == {}
+
+    await session.close()
