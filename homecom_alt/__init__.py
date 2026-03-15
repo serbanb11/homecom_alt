@@ -3243,9 +3243,7 @@ class HomeComCommodule(HomeComAlt):
             return "Wallbox"
         return str(label)
 
-    async def async_cp_start_charging(
-        self, device_id: str, cp_id: str
-    ) -> None:
+    async def async_cp_start_charging(self, device_id: str, cp_id: str) -> None:
         """Start charging on charge point."""
         await self.get_token()
         label = await self.async_get_cp_label(device_id, cp_id)
@@ -3262,9 +3260,7 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_pause_charging(
-        self, device_id: str, cp_id: str
-    ) -> None:
+    async def async_cp_pause_charging(self, device_id: str, cp_id: str) -> None:
         """Pause charging on charge point."""
         await self.get_token()
         label = await self.async_get_cp_label(device_id, cp_id)
