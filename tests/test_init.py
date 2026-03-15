@@ -2373,6 +2373,135 @@ async def test_commodule_put_conf_rfid_secure() -> None:
     await session.close()
 
 
+@pytest.mark.asyncio
+async def test_commodule_get_cp_label() -> None:
+    """Test charge point label retrieval."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"label": "MyWallbox"})),
+    ):
+        label = await cm.async_get_cp_label(DEVICE_ID, "cp0")
+        assert label == "MyWallbox"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_label_fallback_none() -> None:
+    """Test charge point label falls back to Wallbox when label is None."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"label": None})),
+    ):
+        label = await cm.async_get_cp_label(DEVICE_ID, "cp0")
+        assert label == "Wallbox"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_label_fallback_empty() -> None:
+    """Test charge point label falls back to Wallbox when label is empty."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({})),
+    ):
+        label = await cm.async_get_cp_label(DEVICE_ID, "cp0")
+        assert label == "Wallbox"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_cp_start_charging() -> None:
+    """Test start charging command."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "/cp0/conf" in url:
+            return _mock_json_response({"label": "MyWallbox"})
+        return _mock_json_response({})
+
+    with patch.object(
+        cm, "_async_http_request", new=AsyncMock(side_effect=route)
+    ) as mock_req:
+        await cm.async_cp_start_charging(DEVICE_ID, "cp0")
+        assert mock_req.call_count == 2
+        assert "/cmd/start" in mock_req.call_args_list[1][0][1]
+        assert mock_req.call_args_list[1][0][2] == {"name": "MyWallbox"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_cp_pause_charging() -> None:
+    """Test pause charging command."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "/cp0/conf" in url:
+            return _mock_json_response({"label": "MyWallbox"})
+        return _mock_json_response({})
+
+    with patch.object(
+        cm, "_async_http_request", new=AsyncMock(side_effect=route)
+    ) as mock_req:
+        await cm.async_cp_pause_charging(DEVICE_ID, "cp0")
+        assert mock_req.call_count == 2
+        assert "/cmd/pause" in mock_req.call_args_list[1][0][1]
+        assert mock_req.call_args_list[1][0][2] == {"name": "MyWallbox"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_cp_start_charging_label_fallback() -> None:
+    """Test start charging uses Wallbox as fallback label."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({})),
+    ) as mock_req:
+        await cm.async_cp_start_charging(DEVICE_ID, "cp0")
+        assert mock_req.call_args_list[1][0][2] == {"name": "Wallbox"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_cp_pause_charging_label_fallback() -> None:
+    """Test pause charging uses Wallbox as fallback label."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({})),
+    ) as mock_req:
+        await cm.async_cp_pause_charging(DEVICE_ID, "cp0")
+        assert mock_req.call_args_list[1][0][2] == {"name": "Wallbox"}
+
+    await session.close()
+
+
 # ===========================================================================
 # Brand selection (Bosch / Buderus)
 # ===========================================================================
