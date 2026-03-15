@@ -162,6 +162,23 @@ async def test_async_http_request_not_found_returns_empty_dict() -> None:
 
 
 @pytest.mark.asyncio
+async def test_async_http_request_forbidden_returns_empty_dict() -> None:
+    """Test that HTTP 403 returns empty dict (unsupported endpoint)."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.FORBIDDEN
+        )
+        response = await bhc._async_http_request("get", "http://test.com")
+        assert response == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_async_http_request_other_client_error_raises_api_error() -> None:
     """Test that non-special HTTP errors raise ApiError."""
     session = ClientSession()
@@ -170,7 +187,7 @@ async def test_async_http_request_other_client_error_raises_api_error() -> None:
 
     with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
         mock_request.side_effect = ClientResponseError(
-            None, (), status=HTTPStatus.FORBIDDEN
+            None, (), status=HTTPStatus.INTERNAL_SERVER_ERROR
         )
         with pytest.raises(ApiError):
             await bhc._async_http_request("get", "http://test.com")
@@ -1017,7 +1034,7 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0912
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0912, PLR0915
         if "notifications" in url:
             return _mock_json_response({"values": []})
         if "dhwCircuits" in url and "operationMode" in url:
@@ -1127,6 +1144,10 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             return _mock_json_response({"references": []})
         if url.endswith("/resource/zones"):
             return _mock_json_response({"references": []})
+        if "energy/historyEntries" in url:
+            return _mock_json_response({"value": 1})
+        if "energy/historyHourly" in url:
+            return _mock_json_response({"value": []})
         if "energy/history" in url:
             return _mock_json_response({"value": []})
         if url.endswith("/resource/devices"):
@@ -1792,15 +1813,14 @@ async def test_k40_energy_history() -> None:
     session = ClientSession()
     k40 = _make_k40(session)
 
-    with patch.object(
-        k40,
-        "_async_http_request",
-        new=AsyncMock(
-            return_value=_mock_json_response(
-                {"value": [{"d": "19-02-2026", "T": 5.5, "gCh": 106.38}]}
-            )
-        ),
-    ):
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "historyEntries" in url:
+            return _mock_json_response({"value": 5})
+        return _mock_json_response(
+            {"value": [{"d": "19-02-2026", "T": 5.5, "gCh": 106.38}]}
+        )
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
         result = await k40.async_get_energy_history(DEVICE_ID)
         assert result == {"value": [{"d": "19-02-2026", "T": 5.5, "gCh": 106.38}]}
 
@@ -1884,6 +1904,10 @@ async def test_k40_async_update_with_zones_and_devices() -> None:
             return _mock_json_response({"value": "false"})
         if "flameIndication" in url:
             return _mock_json_response({"value": "ch"})
+        if "energy/historyEntries" in url:
+            return _mock_json_response({"value": 1})
+        if "energy/historyHourly" in url:
+            return _mock_json_response({"value": []})
         if "energy/history" in url:
             return _mock_json_response({"value": []})
         if "indoor_h1" in url:
