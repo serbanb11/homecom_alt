@@ -2218,7 +2218,7 @@ class HomeComK40(HomeComAlt):
         return await self._to_data(response)
 
     async def async_get_energy_history(
-            self, device_id: str, entry: int | None = None
+        self, device_id: str, entry: int | None = None
     ) -> Any:
         """Get energy history of the last 24 hours."""
 
@@ -2234,10 +2234,10 @@ class HomeComK40(HomeComAlt):
                 entry = int(entries.get("value", default_entries)) - index_offset
 
         url = (
-                BOSCHCOM_DOMAIN
-                + BOSCHCOM_ENDPOINT_GATEWAYS
-                + device_id
-                + BOSCHCOM_ENDPOINT_ENERGY_HISTORY
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY
         )
 
         if entry is not None:
