@@ -2252,19 +2252,24 @@ class HomeComK40(HomeComAlt):
         max_pages = 100
         all_entries: list[Any] = []
         first_page: dict[str, Any] | None = None
-        next_cursor: int | str | None = 0
+        next_cursor: int | str | None = None
 
         while max_pages > 0:
             max_pages -= 1
+
             url = (
-                BOSCHCOM_DOMAIN
-                + BOSCHCOM_ENDPOINT_GATEWAYS
-                + device_id
-                + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
-                + f"?next={next_cursor}"
+                    BOSCHCOM_DOMAIN
+                    + BOSCHCOM_ENDPOINT_GATEWAYS
+                    + device_id
+                    + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
             )
+
+            if next_cursor is not None:
+                url += f"?next={next_cursor}"
+
             response = await self._async_http_request("get", url)
             page = await self._to_data(response)
+
             if not page:
                 break
 
@@ -2272,11 +2277,15 @@ class HomeComK40(HomeComAlt):
                 first_page = page
 
             page_values = page.get("value", [])
-            for value_item in page_values:
-                all_entries.extend(value_item.get("entries", []))
+
             if not page_values:
                 break
+
+            for value_item in page_values:
+                all_entries.extend(value_item.get("entries", []))
+
             next_cursor = page_values[0].get("next")
+
             if next_cursor is None:
                 break
 
