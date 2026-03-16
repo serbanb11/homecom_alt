@@ -2218,13 +2218,10 @@ class HomeComK40(HomeComAlt):
         return await self._to_data(response)
 
     async def async_get_energy_history(
-        self, device_id: str, entry: int | None = None
+            self, device_id: str, entry: int | None = None
     ) -> Any:
-        """Get energy history of the last 24 hours.
+        """Get energy history of the last 24 hours."""
 
-        If entry is not provided, it will fetch the latest entry based
-        on the total number of available entries.
-        """
         default_entries = 1
         index_offset = 1
 
@@ -2232,15 +2229,20 @@ class HomeComK40(HomeComAlt):
 
         if entry is None:
             entries = await self.async_get_energy_history_entries(device_id)
-            entry = int(entries.get("value", default_entries)) - index_offset
+
+            if isinstance(entries, dict):
+                entry = int(entries.get("value", default_entries)) - index_offset
 
         url = (
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_GATEWAYS
-            + device_id
-            + BOSCHCOM_ENDPOINT_ENERGY_HISTORY
-            + f"?entry={entry}"
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_ENERGY_HISTORY
         )
+
+        if entry is not None:
+            url += f"?entry={entry}"
+
         response = await self._async_http_request("get", url)
         return await self._to_data(response)
 
