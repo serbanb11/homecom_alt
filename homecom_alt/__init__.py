@@ -2221,7 +2221,6 @@ class HomeComK40(HomeComAlt):
         self, device_id: str, entry: int | None = None
     ) -> Any:
         """Get energy history of the last 24 hours."""
-
         default_entries = 1
         index_offset = 1
 
