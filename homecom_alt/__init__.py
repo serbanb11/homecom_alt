@@ -2258,10 +2258,10 @@ class HomeComK40(HomeComAlt):
             max_pages -= 1
 
             url = (
-                    BOSCHCOM_DOMAIN
-                    + BOSCHCOM_ENDPOINT_GATEWAYS
-                    + device_id
-                    + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
+                BOSCHCOM_DOMAIN
+                + BOSCHCOM_ENDPOINT_GATEWAYS
+                + device_id
+                + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
             )
 
             if next_cursor is not None:
