@@ -149,7 +149,7 @@ from .const import (
     OAUTH_PARAMS,
     OAUTH_PARAMS_BUDERUS,
     OAUTH_REFRESH_PARAMS,
-    URLENCODED,
+    URLENCODED, BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
 )
 from .exceptions import (
     ApiError,
@@ -2296,6 +2296,18 @@ class HomeComK40(HomeComAlt):
         result["value"] = [{"entries": all_entries}]
         return result
 
+    async def async_get_energy_gas_unit(self, device_id: str) -> Any:
+        """Get energy gas unit."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
+        )
+        return await self._to_data(response)
+
     async def async_get_energy_history_entries(self, device_id: str) -> Any:
         """Get the total number of available hourly energy history entries."""
         await self.get_token()
@@ -2407,6 +2419,9 @@ class HomeComK40(HomeComAlt):
         hourly_energy_task = asyncio.create_task(
             limited_call(self.async_get_energy_history_hourly(device_id))
         )
+        energy_gas_unit_task = asyncio.create_task(
+            limited_call(self.async_get_energy_gas_unit(device_id))
+        )
         humidity_task = asyncio.create_task(
             limited_call(self.async_get_indoor_humidity(device_id))
         )
@@ -2454,6 +2469,7 @@ class HomeComK40(HomeComAlt):
             flame_indication,
             energy_history,
             hourly_energy_history,
+            energy_gas_unit,
             indoor_humidity,
             devices,
             *heat_sources_values,
@@ -2470,6 +2486,7 @@ class HomeComK40(HomeComAlt):
             flame_task,
             energy_task,
             hourly_energy_task,
+            energy_gas_unit_task,
             humidity_task,
             devices_task,
             *heat_sources_coros,
@@ -2766,6 +2783,7 @@ class HomeComK40(HomeComAlt):
             flame_indication=flame_indication,
             energy_history=energy_history,
             hourly_energy_history=hourly_energy_history,
+            energy_gas_unit=energy_gas_unit,
             indoor_humidity=indoor_humidity,
             devices=device_refs,
         )
