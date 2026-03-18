@@ -55,9 +55,9 @@ class BHCDeviceK40:
     flame_indication: dict | None
     energy_history: list | None
     hourly_energy_history: list | None
-    energy_gas_unit: dict | None
     indoor_humidity: list | None
     devices: list | None
+    energy_gas_unit: dict | None = None
 
 
 @dataclass(frozen=True)
