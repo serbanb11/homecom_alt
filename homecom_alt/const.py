@@ -193,6 +193,7 @@ BOSCHCOM_ENDPOINT_HS_FLAME: Final[str] = "/resource/heatSources/flameIndication"
 BOSCHCOM_ENDPOINT_ENERGY_HISTORY: Final[str] = "/resource/energy/history"
 BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY: Final[str] = "/resource/energy/historyHourly"
 BOSCHCOM_ENDPOINT_ENERGY_HISTORY_ENTRIES: Final[str] = "/resource/energy/historyEntries"
+BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT: Final[str] = "/resource/energy/gas/unit"
 
 BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY: Final[str] = (
     "/resource/system/sensors/humidity/indoor_h1"

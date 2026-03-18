@@ -62,6 +62,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_ECO,
+    BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY_ENTRIES,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY,
@@ -185,6 +186,7 @@ class HomeComAlt:
             OAUTH_PARAMS_BUDERUS if options.brand == "buderus" else OAUTH_PARAMS
         )
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
+        self._lock = asyncio.Lock()
 
     @property
     def refresh_token(self) -> str | None:
@@ -385,33 +387,40 @@ class HomeComAlt:
         if self._auth_provider:
             if self.check_jwt():
                 return None
-            if self._options.refresh_token:
-                data = {**self._oauth_refresh_params}
-                data["refresh_token"] = self._options.refresh_token
-                response = await self._async_http_request(
-                    "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
-                )
-                if response is not None:
-                    try:
-                        response_json = await response.json()
-                    except ValueError as error:
-                        raise InvalidSensorDataError("Invalid devices data") from error
 
-                    if response_json:
-                        self._options.token = response_json["access_token"]
-                        self._options.refresh_token = response_json["refresh_token"]
+            async with self._lock:
+                if self.check_jwt():
+                    return None
+
+                if self._options.refresh_token:
+                    data = {**self._oauth_refresh_params}
+                    data["refresh_token"] = self._options.refresh_token
+                    response = await self._async_http_request(
+                        "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
+                    )
+                    if response is not None:
+                        try:
+                            response_json = await response.json()
+                        except ValueError as error:
+                            raise InvalidSensorDataError(
+                                "Invalid devices data"
+                            ) from error
+
+                        if response_json:
+                            self._options.token = response_json["access_token"]
+                            self._options.refresh_token = response_json["refresh_token"]
+                            return True
+
+                if self._options.code:
+                    response = await self.validate_auth(
+                        self._options.code, OAUTH_BROWSER_VERIFIER
+                    )
+                    if response:
+                        self._options.code = None
+                        self._options.token = response["access_token"]
+                        self._options.refresh_token = response["refresh_token"]
                         return True
-
-            if self._options.code:
-                response = await self.validate_auth(
-                    self._options.code, OAUTH_BROWSER_VERIFIER
-                )
-                if response:
-                    self._options.code = None
-                    self._options.token = response["access_token"]
-                    self._options.refresh_token = response["refresh_token"]
-                    return True
-            raise AuthFailedError("Failed to refresh")
+                raise AuthFailedError("Failed to refresh")
         return None
 
     async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
@@ -2252,19 +2261,24 @@ class HomeComK40(HomeComAlt):
         max_pages = 100
         all_entries: list[Any] = []
         first_page: dict[str, Any] | None = None
-        next_cursor: int | str | None = 0
+        next_cursor: int | str | None = None
 
         while max_pages > 0:
             max_pages -= 1
+
             url = (
                 BOSCHCOM_DOMAIN
                 + BOSCHCOM_ENDPOINT_GATEWAYS
                 + device_id
                 + BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY
-                + f"?next={next_cursor}"
             )
+
+            if next_cursor is not None:
+                url += f"?next={next_cursor}"
+
             response = await self._async_http_request("get", url)
             page = await self._to_data(response)
+
             if not page:
                 break
 
@@ -2272,11 +2286,15 @@ class HomeComK40(HomeComAlt):
                 first_page = page
 
             page_values = page.get("value", [])
-            for value_item in page_values:
-                all_entries.extend(value_item.get("entries", []))
+
             if not page_values:
                 break
+
+            for value_item in page_values:
+                all_entries.extend(value_item.get("entries", []))
+
             next_cursor = page_values[0].get("next")
+
             if next_cursor is None:
                 break
 
@@ -2286,6 +2304,18 @@ class HomeComK40(HomeComAlt):
         result = dict(first_page)
         result["value"] = [{"entries": all_entries}]
         return result
+
+    async def async_get_energy_gas_unit(self, device_id: str) -> Any:
+        """Get energy gas unit."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
+        )
+        return await self._to_data(response)
 
     async def async_get_energy_history_entries(self, device_id: str) -> Any:
         """Get the total number of available hourly energy history entries."""
@@ -2398,6 +2428,9 @@ class HomeComK40(HomeComAlt):
         hourly_energy_task = asyncio.create_task(
             limited_call(self.async_get_energy_history_hourly(device_id))
         )
+        energy_gas_unit_task = asyncio.create_task(
+            limited_call(self.async_get_energy_gas_unit(device_id))
+        )
         humidity_task = asyncio.create_task(
             limited_call(self.async_get_indoor_humidity(device_id))
         )
@@ -2445,6 +2478,7 @@ class HomeComK40(HomeComAlt):
             flame_indication,
             energy_history,
             hourly_energy_history,
+            energy_gas_unit,
             indoor_humidity,
             devices,
             *heat_sources_values,
@@ -2461,6 +2495,7 @@ class HomeComK40(HomeComAlt):
             flame_task,
             energy_task,
             hourly_energy_task,
+            energy_gas_unit_task,
             humidity_task,
             devices_task,
             *heat_sources_coros,
@@ -2757,6 +2792,7 @@ class HomeComK40(HomeComAlt):
             flame_indication=flame_indication,
             energy_history=energy_history,
             hourly_energy_history=hourly_energy_history,
+            energy_gas_unit=energy_gas_unit,
             indoor_humidity=indoor_humidity,
             devices=device_refs,
         )
