@@ -186,6 +186,7 @@ class HomeComAlt:
             OAUTH_PARAMS_BUDERUS if options.brand == "buderus" else OAUTH_PARAMS
         )
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
+        self._lock = asyncio.Lock()
 
     @property
     def refresh_token(self) -> str | None:
@@ -386,33 +387,40 @@ class HomeComAlt:
         if self._auth_provider:
             if self.check_jwt():
                 return None
-            if self._options.refresh_token:
-                data = {**self._oauth_refresh_params}
-                data["refresh_token"] = self._options.refresh_token
-                response = await self._async_http_request(
-                    "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
-                )
-                if response is not None:
-                    try:
-                        response_json = await response.json()
-                    except ValueError as error:
-                        raise InvalidSensorDataError("Invalid devices data") from error
 
-                    if response_json:
-                        self._options.token = response_json["access_token"]
-                        self._options.refresh_token = response_json["refresh_token"]
+            async with self._lock:
+                if self.check_jwt():
+                    return None
+
+                if self._options.refresh_token:
+                    data = {**self._oauth_refresh_params}
+                    data["refresh_token"] = self._options.refresh_token
+                    response = await self._async_http_request(
+                        "post", OAUTH_DOMAIN + OAUTH_ENDPOINT, data, 2
+                    )
+                    if response is not None:
+                        try:
+                            response_json = await response.json()
+                        except ValueError as error:
+                            raise InvalidSensorDataError(
+                                "Invalid devices data"
+                            ) from error
+
+                        if response_json:
+                            self._options.token = response_json["access_token"]
+                            self._options.refresh_token = response_json["refresh_token"]
+                            return True
+
+                if self._options.code:
+                    response = await self.validate_auth(
+                        self._options.code, OAUTH_BROWSER_VERIFIER
+                    )
+                    if response:
+                        self._options.code = None
+                        self._options.token = response["access_token"]
+                        self._options.refresh_token = response["refresh_token"]
                         return True
-
-            if self._options.code:
-                response = await self.validate_auth(
-                    self._options.code, OAUTH_BROWSER_VERIFIER
-                )
-                if response:
-                    self._options.code = None
-                    self._options.token = response["access_token"]
-                    self._options.refresh_token = response["refresh_token"]
-                    return True
-            raise AuthFailedError("Failed to refresh")
+                raise AuthFailedError("Failed to refresh")
         return None
 
     async def validate_auth(self, code: str, code_verifier: str) -> Any | None:
