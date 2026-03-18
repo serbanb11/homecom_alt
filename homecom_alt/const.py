@@ -214,6 +214,7 @@ BOSCHCOM_ENDPOINT_CP_CONF_AUTH: Final[str] = "/conf/auth"
 BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE: Final[str] = "/conf/rfid/secure"
 BOSCHCOM_ENDPOINT_CP_CMD_START: Final[str] = "/cmd/start"
 BOSCHCOM_ENDPOINT_CP_CMD_PAUSE: Final[str] = "/cmd/pause"
+BOSCHCOM_ENDPOINT_CP_CMD_LIMIT: Final[str] = "/cmd/limit"
 BOSCHCOM_ENDPOINT_ETH0_STATE: Final[str] = "/resource/gateway/eth0/state"
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"

@@ -36,6 +36,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_CONTROL,
     BOSCHCOM_ENDPOINT_CP,
     BOSCHCOM_ENDPOINT_CP_CHARGELOG,
+    BOSCHCOM_ENDPOINT_CP_CMD_LIMIT,
     BOSCHCOM_ENDPOINT_CP_CMD_PAUSE,
     BOSCHCOM_ENDPOINT_CP_CMD_START,
     BOSCHCOM_ENDPOINT_CP_CONF,
@@ -3272,18 +3273,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_get_cp_label(self, device_id: str, cp_id: str) -> str:
-        """Get charge point label, defaulting to 'Wallbox' if not set."""
-        conf = await self.async_get_cp_conf(device_id, cp_id)
-        label = (conf or {}).get("label")
-        if not label:
-            return "Wallbox"
-        return str(label)
-
-    async def async_cp_start_charging(self, device_id: str, cp_id: str) -> None:
+    async def async_cp_start_charging(self, device_id: str, cp_id: str, label: str) -> None:
         """Start charging on charge point."""
         await self.get_token()
-        label = await self.async_get_cp_label(device_id, cp_id)
         await self._async_http_request(
             "post",
             BOSCHCOM_DOMAIN
@@ -3297,10 +3289,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_pause_charging(self, device_id: str, cp_id: str) -> None:
+    async def async_cp_pause_charging(self, device_id: str, cp_id: str, label: str) -> None:
         """Pause charging on charge point."""
         await self.get_token()
-        label = await self.async_get_cp_label(device_id, cp_id)
         await self._async_http_request(
             "post",
             BOSCHCOM_DOMAIN
@@ -3311,6 +3302,22 @@ class HomeComCommodule(HomeComAlt):
             + cp_id
             + BOSCHCOM_ENDPOINT_CP_CMD_PAUSE,
             {"name": label},
+            1,
+        )
+
+    async def async_cp_set_limit(self, device_id: str, cp_id: str, limit: int) -> None:
+        """Set charging limit on charge point."""
+        await self.get_token()
+        await self._async_http_request(
+            "post",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CMD_LIMIT,
+            {"limit": limit},
             1,
         )
 
