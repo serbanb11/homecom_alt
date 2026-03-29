@@ -2689,3 +2689,97 @@ async def test_commodule_async_update_none_charge_points() -> None:
     assert result.charge_points == {}
 
     await session.close()
+
+
+# ===========================================================================
+# 429 Rate Limit Handling
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_async_http_request_429_returns_empty_dict() -> None:
+    """Test that HTTP 429 Too Many Requests returns empty dict."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.TOO_MANY_REQUESTS
+        )
+        response = await bhc._async_http_request("get", "http://test.com/endpoint")
+        assert response == {}
+
+    await session.close()
+
+
+# ===========================================================================
+# 404 Not-Found Cache
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_not_found_cache_skips_subsequent_get_requests() -> None:
+    """Test that a 404 GET is cached and subsequent calls skip the HTTP request."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+    url = "http://test.com/resource/ventilation"
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.NOT_FOUND
+        )
+        # First call — hits the API, gets 404, caches it
+        response = await bhc._async_http_request("get", url)
+        assert response == {}
+        assert mock_request.call_count == 1
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        # Second call — served from cache, no HTTP request
+        response = await bhc._async_http_request("get", url)
+        assert response == {}
+        mock_request.assert_not_called()
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_not_found_cache_does_not_cache_post_requests() -> None:
+    """Test that POST requests returning 404 are not cached."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+    url = "http://test.com/resource/some-action"
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.NOT_FOUND
+        )
+        response = await bhc._async_http_request("post", url)
+        assert response == {}
+
+    assert url not in bhc._not_found_cache
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_not_found_cache_is_per_instance() -> None:
+    """Test that each client instance has its own 404 cache."""
+    session = ClientSession()
+    options = _make_options()
+    bhc_a = await HomeComAlt.create(session, options, auth_provider=True)
+    bhc_b = await HomeComAlt.create(session, options, auth_provider=True)
+    url = "http://test.com/resource/ventilation"
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.NOT_FOUND
+        )
+        await bhc_a._async_http_request("get", url)
+
+    assert url in bhc_a._not_found_cache
+    assert url not in bhc_b._not_found_cache
+
+    await session.close()

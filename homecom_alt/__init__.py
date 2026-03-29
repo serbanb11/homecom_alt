@@ -190,6 +190,7 @@ class HomeComAlt:
         )
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
         self._lock = asyncio.Lock()
+        self._not_found_cache: set[str] = set()
 
     @property
     def refresh_token(self) -> str | None:
@@ -226,6 +227,10 @@ class HomeComAlt:
         req_type: int | None = None,
     ) -> Any:
         """Retrieve data from the device."""
+        if method.upper() == "GET" and url in self._not_found_cache:
+            _LOGGER.debug("Skipping cached 404 endpoint %s", url)
+            return {}
+
         headers = {
             "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
         }
@@ -255,11 +260,16 @@ class HomeComAlt:
                 and url == "https://singlekey-id.com/auth/connect/token"
             ):
                 return None
+            if error.status == HTTPStatus.NOT_FOUND.value:
+                _LOGGER.warning("Endpoint %s returned %s", url, error.status)
+                if method.upper() == "GET":
+                    self._not_found_cache.add(url)
+                return {}
             if error.status in (
-                HTTPStatus.NOT_FOUND.value,  # 404
                 HTTPStatus.FORBIDDEN.value,  # 403
                 HTTPStatus.BAD_GATEWAY.value,  # 502
                 HTTPStatus.GATEWAY_TIMEOUT.value,  # 504
+                HTTPStatus.TOO_MANY_REQUESTS.value,  # 429
             ):
                 _LOGGER.warning("Endpoint %s returned %s", url, error.status)
                 return {}
