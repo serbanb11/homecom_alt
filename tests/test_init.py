@@ -2166,6 +2166,8 @@ async def test_commodule_async_update() -> None:
             return _mock_json_response({"values": [{"code": "info"}]})
         if "eth0/state" in url:
             return _mock_json_response({"value": "connected"})
+        if "wifi/state" in url:
+            return _mock_json_response({"value": "disconnected"})
         if url.endswith("/resource/rest/v1"):
             return _mock_json_response({"references": [{"id": "/rest/v1/cp0"}]})
         if "/cp0/conf/price" in url:
@@ -2192,6 +2194,7 @@ async def test_commodule_async_update() -> None:
     assert result.device == DEVICE_ID
     assert result.notifications == [{"code": "info"}]
     assert result.eth0_state == {"value": "connected"}
+    assert result.wifi_state == {"value": "disconnected"}
     assert isinstance(result.charge_points, list)
     assert len(result.charge_points) == 1
     ref = result.charge_points[0]
@@ -2317,6 +2320,23 @@ async def test_commodule_get_eth0_state() -> None:
     ):
         result = await cm.async_get_eth0_state(DEVICE_ID)
         assert result == {"value": "connected"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_wifi_state() -> None:
+    """Test commodule get wifi state."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "disconnected"})),
+    ):
+        result = await cm.async_get_wifi_state(DEVICE_ID)
+        assert result == {"value": "disconnected"}
 
     await session.close()
 

@@ -217,6 +217,7 @@ BOSCHCOM_ENDPOINT_CP_CMD_START: Final[str] = "/cmd/start"
 BOSCHCOM_ENDPOINT_CP_CMD_PAUSE: Final[str] = "/cmd/pause"
 BOSCHCOM_ENDPOINT_CP_CMD_LIMIT: Final[str] = "/cmd/limit"
 BOSCHCOM_ENDPOINT_ETH0_STATE: Final[str] = "/resource/gateway/eth0/state"
+BOSCHCOM_ENDPOINT_WIFI_STATE: Final[str] = "/resource/gateway/wifi/state"
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"

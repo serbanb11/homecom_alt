@@ -138,6 +138,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
     BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
+    BOSCHCOM_ENDPOINT_WIFI_STATE,
     BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
     BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
     BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
@@ -3202,6 +3203,18 @@ class HomeComCommodule(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_wifi_state(self, device_id: str) -> Any:
+        """Get wifi connection state."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_WIFI_STATE,
+        )
+        return await self._to_data(response)
+
     async def async_put_cp_conf_price(
         self, device_id: str, cp_id: str, price: float
     ) -> None:
@@ -3346,6 +3359,7 @@ class HomeComCommodule(HomeComAlt):
 
         notifications = await self.async_get_notifications(device_id)
         eth0_state = await self.async_get_eth0_state(device_id)
+        wifi_state = await self.async_get_wifi_state(device_id)
         charge_points_data = await self.async_get_charge_points(device_id)
         charge_points_data = charge_points_data or {}
         references = charge_points_data.get("references", [])
@@ -3378,4 +3392,5 @@ class HomeComCommodule(HomeComAlt):
             notifications=((notifications or {}).get("values") or []),
             charge_points=charge_points_data.get("references", {}),
             eth0_state=eth0_state,
+            wifi_state=wifi_state,
         )
