@@ -36,6 +36,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_CONTROL,
     BOSCHCOM_ENDPOINT_CP,
     BOSCHCOM_ENDPOINT_CP_CHARGELOG,
+    BOSCHCOM_ENDPOINT_CP_CMD_AUTHENTICATE,
     BOSCHCOM_ENDPOINT_CP_CMD_LIMIT,
     BOSCHCOM_ENDPOINT_CP_CMD_PAUSE,
     BOSCHCOM_ENDPOINT_CP_CMD_START,
@@ -3270,6 +3271,24 @@ class HomeComCommodule(HomeComAlt):
             + cp_id
             + BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
             {"value": value},
+            1,
+        )
+
+    async def async_cp_authenticate(
+        self, device_id: str, cp_id: str, name: str
+    ) -> None:
+        """Authenticate on charge point."""
+        await self.get_token()
+        await self._async_http_request(
+            "post",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CMD_AUTHENTICATE,
+            {"name": name},
             1,
         )
 
