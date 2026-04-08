@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Literal
@@ -172,6 +173,8 @@ from .model import (
 
 _LOGGER = logging.getLogger(__name__)
 
+_NOT_FOUND_CACHE_TTL: float = 86400.0  # 24 hours
+
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -190,7 +193,7 @@ class HomeComAlt:
         )
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
         self._lock = asyncio.Lock()
-        self._not_found_cache: set[str] = set()
+        self._not_found_cache: dict[str, float] = {}
 
     @property
     def refresh_token(self) -> str | None:
@@ -219,7 +222,7 @@ class HomeComAlt:
         """Create a new device instance."""
         return cls(session, options, auth_provider)
 
-    async def _async_http_request(
+    async def _async_http_request(  # noqa: PLR0912
         self,
         method: str,
         url: str,
@@ -228,8 +231,10 @@ class HomeComAlt:
     ) -> Any:
         """Retrieve data from the device."""
         if method.upper() == "GET" and url in self._not_found_cache:
-            _LOGGER.debug("Skipping cached 404 endpoint %s", url)
-            return {}
+            if time.monotonic() - self._not_found_cache[url] < _NOT_FOUND_CACHE_TTL:
+                _LOGGER.debug("Skipping cached 404 endpoint %s", url)
+                return {}
+            del self._not_found_cache[url]
 
         headers = {
             "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
@@ -263,16 +268,18 @@ class HomeComAlt:
             if error.status == HTTPStatus.NOT_FOUND.value:
                 _LOGGER.warning("Endpoint %s returned %s", url, error.status)
                 if method.upper() == "GET":
-                    self._not_found_cache.add(url)
+                    self._not_found_cache[url] = time.monotonic()
                 return {}
             if error.status in (
                 HTTPStatus.FORBIDDEN.value,  # 403
                 HTTPStatus.BAD_GATEWAY.value,  # 502
                 HTTPStatus.GATEWAY_TIMEOUT.value,  # 504
-                HTTPStatus.TOO_MANY_REQUESTS.value,  # 429
             ):
                 _LOGGER.warning("Endpoint %s returned %s", url, error.status)
                 return {}
+            if error.status == HTTPStatus.TOO_MANY_REQUESTS.value:
+                _LOGGER.warning("Endpoint %s returned %s", url, error.status)
+                raise NotRespondingError(f"{url} is rate limited") from error
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
             ) from error
@@ -315,6 +322,7 @@ class HomeComAlt:
 
     async def async_get_firmware(self, device_id: str) -> Any:
         """Get firmware."""
+        await self.get_token()
         response = await self._async_http_request(
             "get",
             BOSCHCOM_DOMAIN
@@ -3315,7 +3323,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_start_charging(self, device_id: str, cp_id: str, label: str) -> None:
+    async def async_cp_start_charging(
+        self, device_id: str, cp_id: str, label: str
+    ) -> None:
         """Start charging on charge point."""
         await self.get_token()
         await self._async_http_request(
@@ -3331,7 +3341,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_pause_charging(self, device_id: str, cp_id: str, label: str) -> None:
+    async def async_cp_pause_charging(
+        self, device_id: str, cp_id: str, label: str
+    ) -> None:
         """Pause charging on charge point."""
         await self.get_token()
         await self._async_http_request(

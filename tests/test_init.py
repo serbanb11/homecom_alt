@@ -1,6 +1,7 @@
 """Tests for HomeComAlt module."""
 # pylint: disable=protected-access
 
+import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -2697,8 +2698,8 @@ async def test_commodule_async_update_none_charge_points() -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_http_request_429_returns_empty_dict() -> None:
-    """Test that HTTP 429 Too Many Requests returns empty dict."""
+async def test_async_http_request_429_raises_not_responding_error() -> None:
+    """Test that HTTP 429 Too Many Requests raises NotRespondingError."""
     session = ClientSession()
     options = _make_options()
     bhc = await HomeComAlt.create(session, options, auth_provider=True)
@@ -2707,8 +2708,8 @@ async def test_async_http_request_429_returns_empty_dict() -> None:
         mock_request.side_effect = ClientResponseError(
             None, (), status=HTTPStatus.TOO_MANY_REQUESTS
         )
-        response = await bhc._async_http_request("get", "http://test.com/endpoint")
-        assert response == {}
+        with pytest.raises(NotRespondingError):
+            await bhc._async_http_request("get", "http://test.com/endpoint")
 
     await session.close()
 
@@ -2783,3 +2784,98 @@ async def test_not_found_cache_is_per_instance() -> None:
     assert url not in bhc_b._not_found_cache
 
     await session.close()
+
+
+# ===========================================================================
+# Bug fix: 429 raises NotRespondingError
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_async_http_request_429_raises_not_responding() -> None:
+    """Test that HTTP 429 raises NotRespondingError instead of returning {}."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.TOO_MANY_REQUESTS
+        )
+        with pytest.raises(NotRespondingError):
+            await bhc._async_http_request("get", "http://test.com")
+
+    await session.close()
+
+
+# ===========================================================================
+# Bug fix: 404 cache TTL
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_not_found_cache_expires_after_ttl() -> None:
+    """Test that a cached 404 entry expires after TTL and the request is retried."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+    url = "http://test.com/resource/firmware"
+
+    # Simulate an expired cache entry (older than 24 hours)
+    bhc._not_found_cache[url] = time.monotonic() - 90000
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_response = _mock_json_response({"value": "1.0"})
+        mock_request.return_value = mock_response
+
+        resp = await bhc._async_http_request("get", url)
+        assert resp.status == HTTPStatus.OK
+        mock_request.assert_called_once()
+
+    # Expired entry should have been removed
+    assert url not in bhc._not_found_cache
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_not_found_cache_active_within_ttl() -> None:
+    """Test that a cached 404 entry is still active within TTL."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+    url = "http://test.com/resource/firmware"
+
+    # Simulate a fresh cache entry
+    bhc._not_found_cache[url] = time.monotonic()
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        resp = await bhc._async_http_request("get", url)
+        assert resp == {}
+        mock_request.assert_not_called()
+
+    await session.close()
+
+
+# ===========================================================================
+# Bug fix: async_get_firmware calls get_token
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_async_get_firmware_calls_get_token() -> None:
+    """Test that async_get_firmware calls get_token before making the request."""
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with (
+        patch.object(bhc, "get_token", new=AsyncMock()) as mock_get_token,
+        patch.object(
+            bhc,
+            "_async_http_request",
+            new=AsyncMock(return_value=_mock_json_response({"value": "1.0"})),
+        ),
+    ):
+        await bhc.async_get_firmware("device-123")
+        mock_get_token.assert_awaited_once()
