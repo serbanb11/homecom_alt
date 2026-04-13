@@ -201,6 +201,17 @@ BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY: Final[str] = (
 
 BOSCHCOM_ENDPOINT_DEVICES: Final[str] = "/resource/devices"
 BOSCHCOM_ENDPOINT_CHILD_LOCK: Final[str] = "/thermostat/childLock/enabled"
+BOSCHCOM_ENDPOINT_DEVICE_ROOM_TEMP: Final[str] = "/roomtemperature"
+BOSCHCOM_ENDPOINT_DEVICE_HUMIDITY: Final[str] = "/actualHumidity"
+BOSCHCOM_ENDPOINT_DEVICE_SGTIN: Final[str] = "/sgtin"
+BOSCHCOM_ENDPOINT_DEVICE_TYPE: Final[str] = "/type"
+BOSCHCOM_ENDPOINT_DEVICE_SIGNAL: Final[str] = "/signal"
+BOSCHCOM_ENDPOINT_DEVICE_RF_STATUS: Final[str] = "/rfConnectionStatus"
+BOSCHCOM_ENDPOINT_DEVICE_BATTERY: Final[str] = "/battery"
+BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID: Final[str] = "/zoneId"
+BOSCHCOM_ENDPOINT_DEVICE_ASSIGNED_HC: Final[str] = "/assignedHC"
+BOSCHCOM_ENDPOINT_DEVICE_OPERATION_MODE: Final[str] = "/operationMode"
+BOSCHCOM_ENDPOINT_DEVICE_CURRENT_ROOM_SETPOINT: Final[str] = "/currentRoomSetpoint"
 
 # Commodule (wallbox/EV charger) endpoints
 BOSCHCOM_ENDPOINT_CP: Final[str] = "/resource/rest/v1"

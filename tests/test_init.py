@@ -1883,12 +1883,12 @@ async def test_k40_devices_and_child_lock() -> None:
 
 
 @pytest.mark.asyncio
-async def test_k40_async_update_with_zones_and_devices() -> None:
+async def test_k40_async_update_with_zones_and_devices() -> None:  # noqa: PLR0915, C901
     """K40 update with zones and devices populated."""
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912, C901
         if "notifications" in url:
             return _mock_json_response({"values": []})
         if url.endswith("/resource/dhwCircuits"):
@@ -1907,6 +1907,28 @@ async def test_k40_async_update_with_zones_and_devices() -> None:
             return _mock_json_response({"references": [{"id": "/devices/device1"}]})
         if "devices" in url and "childLock" in url:
             return _mock_json_response({"value": "false"})
+        if "devices" in url and "roomtemperature" in url:
+            return _mock_json_response({"value": 22.9, "unitOfMeasure": "C"})
+        if "devices" in url and "actualHumidity" in url:
+            return _mock_json_response({"value": 52, "unitOfMeasure": "%"})
+        if "devices" in url and "sgtin" in url:
+            return _mock_json_response({"value": "3014f711a00023a09859e54f"})
+        if "devices" in url and url.endswith("/type"):
+            return _mock_json_response({"value": "THIW_230"})
+        if "devices" in url and url.endswith("/signal"):
+            return _mock_json_response({"value": -57})
+        if "devices" in url and "rfConnectionStatus" in url:
+            return _mock_json_response({"value": "ONLINE"})
+        if "devices" in url and "battery" in url:
+            return _mock_json_response({"value": "NO_BAT"})
+        if "devices" in url and "zoneId" in url:
+            return _mock_json_response({"value": 1})
+        if "devices" in url and "assignedHC" in url:
+            return _mock_json_response({"value": "hc1"})
+        if "devices" in url and "operationMode" in url:
+            return _mock_json_response({})
+        if "devices" in url and "currentRoomSetpoint" in url:
+            return _mock_json_response({})
         if "flameIndication" in url:
             return _mock_json_response({"value": "ch"})
         if "energy/historyEntries" in url:
@@ -1933,9 +1955,81 @@ async def test_k40_async_update_with_zones_and_devices() -> None:
     assert isinstance(result.devices, list)
     assert len(result.devices) == 1
     assert result.devices[0]["childLock"] == {"value": "false"}
+    assert result.devices[0]["roomtemperature"] == {
+        "value": 22.9,
+        "unitOfMeasure": "C",
+    }
+    assert result.devices[0]["actualHumidity"] == {
+        "value": 52,
+        "unitOfMeasure": "%",
+    }
+    assert result.devices[0]["sgtin"] == {"value": "3014f711a00023a09859e54f"}
+    assert result.devices[0]["type"] == {"value": "THIW_230"}
+    assert result.devices[0]["signal"] == {"value": -57}
+    assert result.devices[0]["rfConnectionStatus"] == {"value": "ONLINE"}
+    assert result.devices[0]["battery"] == {"value": "NO_BAT"}
+    assert result.devices[0]["zoneId"] == {"value": 1}
+    assert result.devices[0]["assignedHC"] == {"value": "hc1"}
+    assert result.devices[0]["operationMode"] == {}
+    assert result.devices[0]["currentRoomSetpoint"] == {}
     assert result.flame_indication == {"value": "ch"}
     assert result.energy_history == {"value": []}
     assert result.indoor_humidity == {"value": 43.5}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_device_property_getters() -> None:
+    """Test individual device property getter methods."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response({"value": 22.9, "unitOfMeasure": "C"})
+        ),
+    ):
+        result = await k40.async_get_device_room_temp(DEVICE_ID, "device11")
+        assert result == {"value": 22.9, "unitOfMeasure": "C"}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response({"value": 52, "unitOfMeasure": "%"})
+        ),
+    ):
+        result = await k40.async_get_device_humidity(DEVICE_ID, "device11")
+        assert result == {"value": 52, "unitOfMeasure": "%"}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response({"value": "3014f711a00023a09859e54f"})
+        ),
+    ):
+        result = await k40.async_get_device_sgtin(DEVICE_ID, "device11")
+        assert result == {"value": "3014f711a00023a09859e54f"}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "ONLINE"})),
+    ):
+        result = await k40.async_get_device_rf_status(DEVICE_ID, "device11")
+        assert result == {"value": "ONLINE"}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "hc1"})),
+    ):
+        result = await k40.async_get_device_assigned_hc(DEVICE_ID, "device11")
+        assert result == {"value": "hc1"}
 
     await session.close()
 
