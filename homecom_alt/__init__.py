@@ -281,8 +281,10 @@ class HomeComAlt:
                 if method.upper() == "GET":
                     self._not_found_cache[url] = time.monotonic()
                 return {}
+            if error.status == HTTPStatus.FORBIDDEN.value:
+                _LOGGER.debug("Endpoint %s returned %s", url, error.status)
+                return {}
             if error.status in (
-                HTTPStatus.FORBIDDEN.value,  # 403
                 HTTPStatus.BAD_GATEWAY.value,  # 502
                 HTTPStatus.GATEWAY_TIMEOUT.value,  # 504
             ):
