@@ -234,7 +234,6 @@ class HomeComAlt:
             ],
             JSON,
         )
-        # noqa: ERA001
         # response structure is as follows:
         # ```json
         # [
@@ -277,7 +276,8 @@ class HomeComAlt:
                 if device_endpoint_response_status != HTTPStatus.OK.value:
                     _LOGGER.warning(
                         "Endpoint %s returned %s",
-                        endpoint, device_endpoint_response_status,
+                        endpoint,
+                        device_endpoint_response_status,
                     )
                     continue
                 payload = device_endpoint_response["payload"]
