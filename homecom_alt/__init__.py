@@ -216,6 +216,77 @@ class HomeComAlt:
         """Create a new device instance."""
         return cls(session, options, auth_provider)
 
+    async def async_request_bulk(
+        self, device_id: str, endpoints: list[str]
+    ) -> dict[str, Any] | None:
+        """Retrieve data from the device with an endpoint bundling multiple requests."""
+        await self.get_token()
+
+        # build and send request
+        response = await self._async_http_request(
+            "post",
+            BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_BULK,
+            [
+                {
+                    "gatewayId": device_id,
+                    "resourcePaths": endpoints,
+                }
+            ],
+            JSON,
+        )
+        # noqa: ERA001
+        # response structure is as follows:
+        # ```json
+        # [
+        #     {
+        #         "gatewayId":"<device_id>",
+        #         "resourcePaths" : [
+        #             {
+        #                 "resourcePath":"<endpoint>",
+        #                 "serverStatus":<server_status_code>,
+        #                 "gatewayResponse":{
+        #                     "status":"<device_status_code>",
+        #                     "payload": <the device's actual response>
+        #                 }
+        #             },
+        #             <more entries for requested endpoints>
+        #         ]
+        #     },
+        #     <possibly more entries in case multiple devices are requested>
+        # ]
+        # ```
+        json_response = await self._to_data(response)
+        if json_response is None:
+            # TODO: think of better error return value?
+            return None
+
+        result: dict[str, Any] = {}
+        # parse response
+        try:
+            # get first entry, since only one gateway is requested
+            device_response = json_response[0]
+            endpoint_responses = device_response["resourcePaths"]
+            for endpoint_response in endpoint_responses:
+                endpoint = endpoint_response["resourcePath"]
+                server_status = endpoint_response["serverStatus"]
+                if server_status != HTTPStatus.OK.value:
+                    _LOGGER.warning("Endpoint %s returned %s", endpoint, server_status)
+                    continue
+                device_endpoint_response = endpoint_response["gatewayResponse"]
+                device_endpoint_response_status = device_endpoint_response["status"]
+                if device_endpoint_response_status != HTTPStatus.OK.value:
+                    _LOGGER.warning(
+                        "Endpoint %s returned %s",
+                        endpoint, device_endpoint_response_status,
+                    )
+                    continue
+                payload = device_endpoint_response["payload"]
+                result[endpoint] = payload
+            return result
+        except (KeyError, IndexError, TypeError):
+            # TODO: think of better error return value?
+            return None
+
     async def _async_http_request(
         self,
         method: str,
@@ -3273,7 +3344,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_start_charging(self, device_id: str, cp_id: str, label: str) -> None:
+    async def async_cp_start_charging(
+        self, device_id: str, cp_id: str, label: str
+    ) -> None:
         """Start charging on charge point."""
         await self.get_token()
         await self._async_http_request(
@@ -3289,7 +3362,9 @@ class HomeComCommodule(HomeComAlt):
             1,
         )
 
-    async def async_cp_pause_charging(self, device_id: str, cp_id: str, label: str) -> None:
+    async def async_cp_pause_charging(
+        self, device_id: str, cp_id: str, label: str
+    ) -> None:
         """Pause charging on charge point."""
         await self.get_token()
         await self._async_http_request(
