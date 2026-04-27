@@ -79,3 +79,4 @@ class BHCDeviceCommodule:
     notifications: list | None
     charge_points: list | None
     eth0_state: dict | None
+    wifi_state: dict | None
