@@ -158,6 +158,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_ZONES,
     DEFAULT_TIMEOUT,
     JSON,
+    MAX_BULK_ENDPOINTS,
     MAX_CONCURRENT,
     OAUTH_BROWSER_VERIFIER,
     OAUTH_DOMAIN,
@@ -236,10 +237,29 @@ class HomeComAlt:
     async def async_request_bulk(
         self, device_id: str, endpoints: list[str]
     ) -> dict[str, Any] | None:
-        """Retrieve data from the device with an endpoint bundling multiple requests."""
+        """Retrieve data from the device with an endpoint bundling multiple requests.
+
+        Automatically chunks into multiple calls if more than
+        MAX_BULK_ENDPOINTS are requested (API limit).
+        """
         await self.get_token()
 
-        # build and send request
+        if len(endpoints) <= MAX_BULK_ENDPOINTS:
+            return await self._async_request_bulk_single(device_id, endpoints)
+
+        # Chunk into multiple bulk calls
+        result: dict[str, Any] = {}
+        for i in range(0, len(endpoints), MAX_BULK_ENDPOINTS):
+            chunk = endpoints[i : i + MAX_BULK_ENDPOINTS]
+            chunk_result = await self._async_request_bulk_single(device_id, chunk)
+            if chunk_result:
+                result.update(chunk_result)
+        return result or None
+
+    async def _async_request_bulk_single(
+        self, device_id: str, endpoints: list[str]
+    ) -> dict[str, Any] | None:
+        """Send a single bulk request for up to 30 endpoints."""
         response = await self._async_http_request(
             "post",
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_BULK,
@@ -251,35 +271,12 @@ class HomeComAlt:
             ],
             JSON,
         )
-        # response structure is as follows:
-        # ```json
-        # [
-        #     {
-        #         "gatewayId":"<device_id>",
-        #         "resourcePaths" : [
-        #             {
-        #                 "resourcePath":"<endpoint>",
-        #                 "serverStatus":<server_status_code>,
-        #                 "gatewayResponse":{
-        #                     "status":"<device_status_code>",
-        #                     "payload": <the device's actual response>
-        #                 }
-        #             },
-        #             <more entries for requested endpoints>
-        #         ]
-        #     },
-        #     <possibly more entries in case multiple devices are requested>
-        # ]
-        # ```
         json_response = await self._to_data(response)
         if json_response is None:
-            # TODO: think of better error return value?
             return None
 
         result: dict[str, Any] = {}
-        # parse response
         try:
-            # get first entry, since only one gateway is requested
             device_response = json_response[0]
             endpoint_responses = device_response["resourcePaths"]
             for endpoint_response in endpoint_responses:
@@ -299,10 +296,10 @@ class HomeComAlt:
                     continue
                 payload = device_endpoint_response["payload"]
                 result[endpoint] = payload
-            return result
         except (KeyError, IndexError, TypeError):
-            # TODO: think of better error return value?
             return None
+        else:
+            return result
 
     async def _async_http_request(  # noqa: PLR0912
         self,
@@ -623,13 +620,27 @@ class HomeComRac(HomeComAlt):
         return await self._to_data(response)
 
     async def async_update(self, device_id: str) -> BHCDeviceRac:
-        """Retrieve data from the device."""
+        """Retrieve data from the device using a single bulk request."""
         await self.get_token()
 
-        notifications = await self.async_get_notifications(device_id)
-        stardard_functions = await self.async_get_stardard(device_id)
-        advanced_functions = await self.async_get_advanced(device_id)
-        switch_programs = await self.async_get_switch(device_id)
+        bulk_response = await self.async_request_bulk(
+            device_id,
+            [
+                BOSCHCOM_ENDPOINT_NOTIFICATIONS,
+                BOSCHCOM_ENDPOINT_STANDARD,
+                BOSCHCOM_ENDPOINT_ADVANCED,
+                BOSCHCOM_ENDPOINT_SWITCH,
+            ],
+        )
+
+        if bulk_response is None:
+            bulk_response = {}
+
+        notifications = bulk_response.get(BOSCHCOM_ENDPOINT_NOTIFICATIONS, {})
+        stardard_functions = bulk_response.get(BOSCHCOM_ENDPOINT_STANDARD, {})
+        advanced_functions = bulk_response.get(BOSCHCOM_ENDPOINT_ADVANCED, {})
+        switch_programs = bulk_response.get(BOSCHCOM_ENDPOINT_SWITCH, {})
+
         return BHCDeviceRac(
             device=device_id,
             firmware=[],
@@ -2508,81 +2519,61 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_device_room_temp(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_room_temp(self, device_id: str, dev_id: str) -> Any:
         """Get device room temperature."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ROOM_TEMP
         )
 
-    async def async_get_device_humidity(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_humidity(self, device_id: str, dev_id: str) -> Any:
         """Get device actual humidity."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_HUMIDITY
         )
 
-    async def async_get_device_sgtin(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_sgtin(self, device_id: str, dev_id: str) -> Any:
         """Get device SGTIN identifier."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_SGTIN
         )
 
-    async def async_get_device_type(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_type(self, device_id: str, dev_id: str) -> Any:
         """Get device type."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_TYPE
         )
 
-    async def async_get_device_signal(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_signal(self, device_id: str, dev_id: str) -> Any:
         """Get device signal strength."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_SIGNAL
         )
 
-    async def async_get_device_rf_status(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_rf_status(self, device_id: str, dev_id: str) -> Any:
         """Get device RF connection status."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_RF_STATUS
         )
 
-    async def async_get_device_battery(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_battery(self, device_id: str, dev_id: str) -> Any:
         """Get device battery status."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_BATTERY
         )
 
-    async def async_get_device_zone_id(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_zone_id(self, device_id: str, dev_id: str) -> Any:
         """Get device zone ID."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID
         )
 
-    async def async_get_device_assigned_hc(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_assigned_hc(self, device_id: str, dev_id: str) -> Any:
         """Get device assigned heating circuit."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ASSIGNED_HC
         )
 
-    async def async_get_device_operation_mode(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_operation_mode(self, device_id: str, dev_id: str) -> Any:
         """Get device operation mode."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_OPERATION_MODE
@@ -2992,43 +2983,21 @@ class HomeComK40(HomeComAlt):
                     ref["operationMode"],
                     ref["currentRoomSetpoint"],
                 ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_child_lock(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_room_temp(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_humidity(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_sgtin(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_type(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_signal(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_rf_status(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_battery(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_zone_id(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_assigned_hc(device_id, dev_id)
-                    ),
+                    limited_call(self.async_get_child_lock(device_id, dev_id)),
+                    limited_call(self.async_get_device_room_temp(device_id, dev_id)),
+                    limited_call(self.async_get_device_humidity(device_id, dev_id)),
+                    limited_call(self.async_get_device_sgtin(device_id, dev_id)),
+                    limited_call(self.async_get_device_type(device_id, dev_id)),
+                    limited_call(self.async_get_device_signal(device_id, dev_id)),
+                    limited_call(self.async_get_device_rf_status(device_id, dev_id)),
+                    limited_call(self.async_get_device_battery(device_id, dev_id)),
+                    limited_call(self.async_get_device_zone_id(device_id, dev_id)),
+                    limited_call(self.async_get_device_assigned_hc(device_id, dev_id)),
                     limited_call(
                         self.async_get_device_operation_mode(device_id, dev_id)
                     ),
                     limited_call(
-                        self.async_get_device_current_room_setpoint(
-                            device_id, dev_id
-                        )
+                        self.async_get_device_current_room_setpoint(device_id, dev_id)
                     ),
                 )
 

@@ -251,3 +251,6 @@ JSON: Final[int] = 1
 
 # Higher concurrency will run into internal queues and rate limits
 MAX_CONCURRENT: Final[int] = 3
+
+# Maximum number of resource paths per bulk API request
+MAX_BULK_ENDPOINTS: Final[int] = 30
