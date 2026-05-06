@@ -158,7 +158,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_ZONES,
     DEFAULT_TIMEOUT,
     JSON,
-    MAX_CONCURRENT,
+    MAX_BULK_ENDPOINTS,
     OAUTH_BROWSER_VERIFIER,
     OAUTH_DOMAIN,
     OAUTH_ENDPOINT,
@@ -236,10 +236,29 @@ class HomeComAlt:
     async def async_request_bulk(
         self, device_id: str, endpoints: list[str]
     ) -> dict[str, Any] | None:
-        """Retrieve data from the device with an endpoint bundling multiple requests."""
+        """Retrieve data from the device with an endpoint bundling multiple requests.
+
+        Automatically chunks into multiple calls if more than
+        MAX_BULK_ENDPOINTS are requested (API limit).
+        """
         await self.get_token()
 
-        # build and send request
+        if len(endpoints) <= MAX_BULK_ENDPOINTS:
+            return await self._async_request_bulk_single(device_id, endpoints)
+
+        # Chunk into multiple bulk calls
+        result: dict[str, Any] = {}
+        for i in range(0, len(endpoints), MAX_BULK_ENDPOINTS):
+            chunk = endpoints[i : i + MAX_BULK_ENDPOINTS]
+            chunk_result = await self._async_request_bulk_single(device_id, chunk)
+            if chunk_result:
+                result.update(chunk_result)
+        return result or None
+
+    async def _async_request_bulk_single(
+        self, device_id: str, endpoints: list[str]
+    ) -> dict[str, Any] | None:
+        """Send a single bulk request for up to 30 endpoints."""
         response = await self._async_http_request(
             "post",
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_BULK,
@@ -251,35 +270,12 @@ class HomeComAlt:
             ],
             JSON,
         )
-        # response structure is as follows:
-        # ```json
-        # [
-        #     {
-        #         "gatewayId":"<device_id>",
-        #         "resourcePaths" : [
-        #             {
-        #                 "resourcePath":"<endpoint>",
-        #                 "serverStatus":<server_status_code>,
-        #                 "gatewayResponse":{
-        #                     "status":"<device_status_code>",
-        #                     "payload": <the device's actual response>
-        #                 }
-        #             },
-        #             <more entries for requested endpoints>
-        #         ]
-        #     },
-        #     <possibly more entries in case multiple devices are requested>
-        # ]
-        # ```
         json_response = await self._to_data(response)
         if json_response is None:
-            # TODO: think of better error return value?
             return None
 
         result: dict[str, Any] = {}
-        # parse response
         try:
-            # get first entry, since only one gateway is requested
             device_response = json_response[0]
             endpoint_responses = device_response["resourcePaths"]
             for endpoint_response in endpoint_responses:
@@ -299,10 +295,10 @@ class HomeComAlt:
                     continue
                 payload = device_endpoint_response["payload"]
                 result[endpoint] = payload
-            return result
         except (KeyError, IndexError, TypeError):
-            # TODO: think of better error return value?
             return None
+        else:
+            return result
 
     async def _async_http_request(  # noqa: PLR0912
         self,
@@ -623,13 +619,27 @@ class HomeComRac(HomeComAlt):
         return await self._to_data(response)
 
     async def async_update(self, device_id: str) -> BHCDeviceRac:
-        """Retrieve data from the device."""
+        """Retrieve data from the device using a single bulk request."""
         await self.get_token()
 
-        notifications = await self.async_get_notifications(device_id)
-        stardard_functions = await self.async_get_stardard(device_id)
-        advanced_functions = await self.async_get_advanced(device_id)
-        switch_programs = await self.async_get_switch(device_id)
+        bulk_response = await self.async_request_bulk(
+            device_id,
+            [
+                BOSCHCOM_ENDPOINT_NOTIFICATIONS,
+                BOSCHCOM_ENDPOINT_STANDARD,
+                BOSCHCOM_ENDPOINT_ADVANCED,
+                BOSCHCOM_ENDPOINT_SWITCH,
+            ],
+        )
+
+        if bulk_response is None:
+            bulk_response = {}
+
+        notifications = bulk_response.get(BOSCHCOM_ENDPOINT_NOTIFICATIONS, {})
+        stardard_functions = bulk_response.get(BOSCHCOM_ENDPOINT_STANDARD, {})
+        advanced_functions = bulk_response.get(BOSCHCOM_ENDPOINT_ADVANCED, {})
+        switch_programs = bulk_response.get(BOSCHCOM_ENDPOINT_SWITCH, {})
+
         return BHCDeviceRac(
             device=device_id,
             firmware=[],
@@ -2508,81 +2518,61 @@ class HomeComK40(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_get_device_room_temp(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_room_temp(self, device_id: str, dev_id: str) -> Any:
         """Get device room temperature."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ROOM_TEMP
         )
 
-    async def async_get_device_humidity(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_humidity(self, device_id: str, dev_id: str) -> Any:
         """Get device actual humidity."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_HUMIDITY
         )
 
-    async def async_get_device_sgtin(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_sgtin(self, device_id: str, dev_id: str) -> Any:
         """Get device SGTIN identifier."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_SGTIN
         )
 
-    async def async_get_device_type(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_type(self, device_id: str, dev_id: str) -> Any:
         """Get device type."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_TYPE
         )
 
-    async def async_get_device_signal(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_signal(self, device_id: str, dev_id: str) -> Any:
         """Get device signal strength."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_SIGNAL
         )
 
-    async def async_get_device_rf_status(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_rf_status(self, device_id: str, dev_id: str) -> Any:
         """Get device RF connection status."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_RF_STATUS
         )
 
-    async def async_get_device_battery(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_battery(self, device_id: str, dev_id: str) -> Any:
         """Get device battery status."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_BATTERY
         )
 
-    async def async_get_device_zone_id(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_zone_id(self, device_id: str, dev_id: str) -> Any:
         """Get device zone ID."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID
         )
 
-    async def async_get_device_assigned_hc(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_assigned_hc(self, device_id: str, dev_id: str) -> Any:
         """Get device assigned heating circuit."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_ASSIGNED_HC
         )
 
-    async def async_get_device_operation_mode(
-        self, device_id: str, dev_id: str
-    ) -> Any:
+    async def async_get_device_operation_mode(self, device_id: str, dev_id: str) -> Any:
         """Get device operation mode."""
         return await self._async_get_device_property(
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_OPERATION_MODE
@@ -2596,444 +2586,316 @@ class HomeComK40(HomeComAlt):
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_CURRENT_ROOM_SETPOINT
         )
 
-    async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0915
-        """Retrieve data from the device concurrently with limited concurrency."""
+    async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0915, C901, PLR0912
+        """Retrieve data from the device using bulk requests.
+
+        Reduces ~50-100+ individual HTTP calls down to 2 bulk
+        + a few consumption calls.
+        """
         await self.get_token()
-
-        semaphore = asyncio.BoundedSemaphore(MAX_CONCURRENT)
-
-        async def limited_call(coro: Any) -> Any:
-            async with semaphore:
-                return await coro
 
         today = datetime.now(tz=UTC)
 
-        notifications_task = asyncio.create_task(
-            limited_call(self.async_get_notifications(device_id))
-        )
-        dhw_task = asyncio.create_task(limited_call(self.async_get_dhw(device_id)))
-        heating_task = asyncio.create_task(limited_call(self.async_get_hc(device_id)))
-        holiday_task = asyncio.create_task(
-            limited_call(self.async_get_holiday_mode(device_id))
-        )
-        away_task = asyncio.create_task(
-            limited_call(self.async_get_away_mode(device_id))
-        )
-        power_task = asyncio.create_task(
-            limited_call(self.async_get_power_limitation(device_id))
-        )
-        outdoor_task = asyncio.create_task(
-            limited_call(self.async_get_outdoor_temp(device_id))
-        )
-        ventilation_task = asyncio.create_task(
-            limited_call(self.async_get_ventilation_zones(device_id))
-        )
-        zones_task = asyncio.create_task(limited_call(self.async_get_zones(device_id)))
-        flame_task = asyncio.create_task(
-            limited_call(self.async_get_hs_flame_indication(device_id))
-        )
-        energy_task = asyncio.create_task(
-            limited_call(self.async_get_energy_history(device_id))
-        )
-        hourly_energy_task = asyncio.create_task(
-            limited_call(self.async_get_energy_history_hourly(device_id))
-        )
-        energy_gas_unit_task = asyncio.create_task(
-            limited_call(self.async_get_energy_gas_unit(device_id))
-        )
-        humidity_task = asyncio.create_task(
-            limited_call(self.async_get_indoor_humidity(device_id))
-        )
-        devices_task = asyncio.create_task(
-            limited_call(self.async_get_devices_list(device_id))
-        )
-
-        heat_sources_keys = [
-            "pumpType",
-            "starts",
-            "returnTemperature",
-            "actualSupplyTemperature",
-            "actualModulation",
-            "collectorInflowTemp",
-            "collectorOutflowTemp",
-            "actualHeatDemand",
-            "totalWorkingTime",
-            "consumption",
-            "systemPressure",
-        ]
-        heat_sources_coros = [
-            limited_call(self.async_get_hs_pump_type(device_id)),
-            limited_call(self.async_get_hs_starts(device_id)),
-            limited_call(self.async_get_hs_return_temp(device_id)),
-            limited_call(self.async_get_hs_supply_temp(device_id)),
-            limited_call(self.async_get_hs_modulation(device_id)),
-            limited_call(self.async_get_hs_brine_inflow_temp(device_id)),
-            limited_call(self.async_get_hs_brine_outflow_temp(device_id)),
-            limited_call(self.async_get_hs_heat_demand(device_id)),
-            limited_call(self.async_get_hs_working_time(device_id)),
-            limited_call(self.async_get_hs_total_consumption(device_id)),
-            limited_call(self.async_get_hs_system_pressure(device_id)),
+        # === Phase 1: Bulk request for all top-level endpoints ===
+        phase1_endpoints = [
+            BOSCHCOM_ENDPOINT_NOTIFICATIONS,
+            BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+            BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
+            BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+            BOSCHCOM_ENDPOINT_AWAY_MODE,
+            BOSCHCOM_ENDPOINT_POWER_LIMITATION,
+            BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
+            BOSCHCOM_ENDPOINT_VENTILATION,
+            BOSCHCOM_ENDPOINT_ZONES,
+            BOSCHCOM_ENDPOINT_HS_FLAME,
+            BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
+            BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
+            BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
+            BOSCHCOM_ENDPOINT_DEVICES,
+            # Heat sources
+            BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+            BOSCHCOM_ENDPOINT_HS_STARTS,
+            BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
+            BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
+            BOSCHCOM_ENDPOINT_HS_MODULATION,
+            BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
+            BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
+            BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
+            BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
+            BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
+            BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
         ]
 
-        (
-            notifications,
-            dhw_circuits,
-            heating_circuits,
-            holiday_mode,
-            away_mode,
-            power_limitation,
-            outdoor_temp,
-            ventilation,
-            zones,
-            flame_indication,
-            energy_history,
-            hourly_energy_history,
-            energy_gas_unit,
-            indoor_humidity,
-            devices,
-            *heat_sources_values,
-        ) = await asyncio.gather(
-            notifications_task,
-            dhw_task,
-            heating_task,
-            holiday_task,
-            away_task,
-            power_task,
-            outdoor_task,
-            ventilation_task,
-            zones_task,
-            flame_task,
-            energy_task,
-            hourly_energy_task,
-            energy_gas_unit_task,
-            humidity_task,
-            devices_task,
-            *heat_sources_coros,
+        # Fetch phase 1 bulk + paginated hourly energy in parallel
+        phase1_result, hourly_energy_history = await asyncio.gather(
+            self.async_request_bulk(device_id, phase1_endpoints),
+            self.async_get_energy_history_hourly(device_id),
         )
+        bulk = phase1_result or {}
 
-        heat_sources = {
-            k: v or {}
-            for k, v in zip(heat_sources_keys, heat_sources_values, strict=True)
+        # Extract top-level data from bulk response
+        notifications = bulk.get(BOSCHCOM_ENDPOINT_NOTIFICATIONS, {})
+        dhw_circuits = bulk.get(BOSCHCOM_ENDPOINT_DHW_CIRCUITS, {}) or {}
+        heating_circuits = bulk.get(BOSCHCOM_ENDPOINT_HEATING_CIRCUITS, {}) or {}
+        holiday_mode = bulk.get(BOSCHCOM_ENDPOINT_HOLIDAY_MODE)
+        away_mode = bulk.get(BOSCHCOM_ENDPOINT_AWAY_MODE)
+        power_limitation = bulk.get(BOSCHCOM_ENDPOINT_POWER_LIMITATION)
+        outdoor_temp = bulk.get(BOSCHCOM_ENDPOINT_OUTDOOR_TEMP)
+        ventilation = bulk.get(BOSCHCOM_ENDPOINT_VENTILATION, {}) or {}
+        zones = bulk.get(BOSCHCOM_ENDPOINT_ZONES, {}) or {}
+        flame_indication = bulk.get(BOSCHCOM_ENDPOINT_HS_FLAME)
+        energy_history = bulk.get(BOSCHCOM_ENDPOINT_ENERGY_HISTORY)
+        energy_gas_unit = bulk.get(BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT)
+        indoor_humidity = bulk.get(BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY)
+        devices = bulk.get(BOSCHCOM_ENDPOINT_DEVICES, {}) or {}
+
+        # Build heat_sources dict
+        heat_sources: dict[str, Any] = {
+            "pumpType": bulk.get(BOSCHCOM_ENDPOINT_HS_PUMP_TYPE) or {},
+            "starts": bulk.get(BOSCHCOM_ENDPOINT_HS_STARTS) or {},
+            "returnTemperature": bulk.get(BOSCHCOM_ENDPOINT_HS_RETURN_TEMP) or {},
+            "actualSupplyTemperature": (
+                bulk.get(BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP) or {}
+            ),
+            "actualModulation": bulk.get(BOSCHCOM_ENDPOINT_HS_MODULATION) or {},
+            "collectorInflowTemp": (bulk.get(BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP) or {}),
+            "collectorOutflowTemp": (bulk.get(BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP) or {}),
+            "actualHeatDemand": bulk.get(BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND) or {},
+            "totalWorkingTime": (bulk.get(BOSCHCOM_ENDPOINT_HS_WORKING_TIME) or {}),
+            "consumption": (bulk.get(BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION) or {}),
+            "systemPressure": (bulk.get(BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE) or {}),
+            "flameIndication": flame_indication or {},
         }
-        heat_sources["flameIndication"] = flame_indication or {}
 
+        # === Consumption calls (POST-based, recordings paths) ===
         (
             heat_sources["dayconsumption"],
             heat_sources["monthconsumption"],
             heat_sources["yearconsumption"],
         ) = await asyncio.gather(
-            limited_call(
-                self.async_get_consumption(
-                    device_id, "total", today.strftime("%Y-%m-%d")
-                )
-            ),
-            limited_call(
-                self.async_get_consumption(device_id, "total", today.strftime("%Y-%m"))
-            ),
-            limited_call(
-                self.async_get_consumption(device_id, "total", today.strftime("%Y"))
-            ),
+            self.async_get_consumption(device_id, "total", today.strftime("%Y-%m-%d")),
+            self.async_get_consumption(device_id, "total", today.strftime("%Y-%m")),
+            self.async_get_consumption(device_id, "total", today.strftime("%Y")),
         )
 
-        dhw_circuits = dhw_circuits or {}
+        # === Phase 2: Bulk request for all per-circuit/zone/device endpoints ===
+        phase2_endpoints: list[str] = []
+        phase2_mapping: list[tuple[dict[str, Any], str]] = []
+
         dhw_refs = dhw_circuits.get("references", [])
-        if dhw_refs:
-
-            async def populate_dhw(ref: dict[str, Any]) -> None:
-                dhw_id = ref["id"].split("/")[-1]
-                (
-                    ref["operationMode"],
-                    ref["actualTemp"],
-                    ref["charge"],
-                    ref["chargeRemainingTime"],
-                    ref["currentTemperatureLevel"],
-                    ref["singleChargeSetpoint"],
-                ) = await asyncio.gather(
-                    limited_call(self.async_get_dhw_operation_mode(device_id, dhw_id)),
-                    limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
-                    limited_call(self.async_get_dhw_charge(device_id, dhw_id)),
-                    limited_call(
-                        self.async_get_dhw_charge_remaining_time(device_id, dhw_id)
-                    ),
-                    limited_call(
-                        self.async_get_dhw_current_temp_level(device_id, dhw_id)
-                    ),
-                    limited_call(self.async_get_dhw_charge_setpoint(device_id, dhw_id)),
-                )
-
-                ref["tempLevel"] = {}
-                ctl = ref.get("currentTemperatureLevel") or {}
-                temp_tasks = [
-                    limited_call(
-                        self.async_get_dhw_temp_level(device_id, dhw_id, value)
-                    )
-                    for value in ctl.get("allowedValues", [])
-                    if value != "off"
-                ]
-                if temp_tasks:
-                    temp_results = await asyncio.gather(*temp_tasks)
-                    for value, res in zip(
-                        [v for v in ctl.get("allowedValues", []) if v != "off"],
-                        temp_results,
-                        strict=True,
-                    ):
-                        ref["tempLevel"][value] = res
-
-                (
-                    ref["dayconsumption"],
-                    ref["monthconsumption"],
-                    ref["yearconsumption"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y-%m-%d")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y-%m")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y")
-                        )
-                    ),
-                )
-
-            await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
-        else:
-            dhw_circuits["references"] = {}
-
-        heating_circuits = heating_circuits or {}
         hc_refs = heating_circuits.get("references", [])
-        if hc_refs:
+        vent_refs = ventilation.get("references", [])
+        zone_refs = zones.get("references", [])
+        device_refs = devices.get("references", [])
 
-            async def populate_hc(ref: dict[str, Any]) -> None:
-                hc_id = ref["id"].split("/")[-1]
-                (
-                    ref["operationMode"],
-                    ref["currentSuWiMode"],
-                    ref["heatCoolMode"],
-                    ref["roomTemp"],
-                    ref["actualHumidity"],
-                    ref["manualRoomSetpoint"],
-                    ref["currentRoomSetpoint"],
-                    ref["coolingRoomTempSetpoint"],
-                    ref["maxSupply"],
-                    ref["minSupply"],
-                    ref["heatCurveMax"],
-                    ref["heatCurveMin"],
-                    ref["supplyTemperatureSetpoint"],
-                    ref["nightSwitchMode"],
-                    ref["control"],
-                    ref["nightThreshold"],
-                    ref["roomInfluence"],
-                ) = await asyncio.gather(
-                    limited_call(self.async_get_hc_operation_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_suwi_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heatcool_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_room_temp(device_id, hc_id)),
-                    limited_call(self.async_get_hc_actual_humidity(device_id, hc_id)),
-                    limited_call(
-                        self.async_get_hc_manual_room_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(
-                        self.async_get_hc_current_room_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(
-                        self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(self.async_get_hc_max_supply(device_id, hc_id)),
-                    limited_call(self.async_get_hc_min_supply(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heat_curve_max(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heat_curve_min(device_id, hc_id)),
-                    limited_call(
-                        self.async_get_hc_supply_temp_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(self.async_get_hc_night_switch_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_control(device_id, hc_id)),
-                    limited_call(self.async_get_hc_night_threshold(device_id, hc_id)),
-                    limited_call(self.async_get_hc_room_influence(device_id, hc_id)),
+        # DHW circuit endpoints
+        dhw_suffixes = [
+            ("operationMode", BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE),
+            ("actualTemp", BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP),
+            ("charge", BOSCHCOM_ENDPOINT_DWH_CHARGE),
+            ("chargeRemainingTime", BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME),
+            ("currentTemperatureLevel", BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL),
+            ("singleChargeSetpoint", BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT),
+        ]
+        for ref in dhw_refs:
+            dhw_id = ref["id"].split("/")[-1]
+            for key, suffix in dhw_suffixes:
+                path = f"{BOSCHCOM_ENDPOINT_DHW_CIRCUITS}/{dhw_id}{suffix}"
+                phase2_endpoints.append(path)
+                phase2_mapping.append((ref, key))
+
+        # HC endpoints
+        hc_suffixes = [
+            ("operationMode", BOSCHCOM_ENDPOINT_HC_OPERATION_MODE),
+            ("currentSuWiMode", BOSCHCOM_ENDPOINT_HC_SUWI_MODE),
+            ("heatCoolMode", BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE),
+            ("roomTemp", BOSCHCOM_ENDPOINT_HC_ROOM_TEMP),
+            ("actualHumidity", BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY),
+            ("manualRoomSetpoint", BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT),
+            ("currentRoomSetpoint", BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT),
+            (
+                "coolingRoomTempSetpoint",
+                BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+            ),
+            ("maxSupply", BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY),
+            ("minSupply", BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY),
+            ("heatCurveMax", BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX),
+            ("heatCurveMin", BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN),
+            (
+                "supplyTemperatureSetpoint",
+                BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
+            ),
+            ("nightSwitchMode", BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE),
+            ("control", BOSCHCOM_ENDPOINT_HC_CONTROL),
+            ("nightThreshold", BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD),
+            ("roomInfluence", BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE),
+        ]
+        for ref in hc_refs:
+            hc_id = ref["id"].split("/")[-1]
+            for key, suffix in hc_suffixes:
+                path = f"{BOSCHCOM_ENDPOINT_HEATING_CIRCUITS}/{hc_id}{suffix}"
+                phase2_endpoints.append(path)
+                phase2_mapping.append((ref, key))
+
+        # Ventilation endpoints
+        vent_suffixes = [
+            ("exhaustFanLevel", BOSCHCOM_ENDPOINT_VENTILATION_FAN),
+            ("maxIndoorAirQuality", BOSCHCOM_ENDPOINT_VENTILATION_QUALITY),
+            ("maxRelativeHumidity", BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY),
+            ("operationMode", BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE),
+            ("exhaustTemp", BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP),
+            ("extractTemp", BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP),
+            (
+                "internalAirQuality",
+                BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+            ),
+            (
+                "internalHumidity",
+                BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
+            ),
+            ("outdoorTemp", BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP),
+            ("supplyTemp", BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP),
+            ("summerBypassEnable", BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE),
+            (
+                "summerBypassDuration",
+                BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
+            ),
+            (
+                "demandindoorAirQuality",
+                BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
+            ),
+            (
+                "demandrelativeHumidity",
+                BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+            ),
+        ]
+        for ref in vent_refs:
+            zone_id = ref["id"].split("/")[-1]
+            for key, suffix in vent_suffixes:
+                path = f"{BOSCHCOM_ENDPOINT_VENTILATION}/{zone_id}{suffix}"
+                phase2_endpoints.append(path)
+                phase2_mapping.append((ref, key))
+
+        # Zone endpoints
+        zone_suffixes = [
+            ("userMode", BOSCHCOM_ENDPOINT_ZONE_USER_MODE),
+            ("tempSetpoint", BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING),
+            ("temperatureActual", BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL),
+            (
+                "manualTemperatureHeating",
+                BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+            ),
+        ]
+        for ref in zone_refs:
+            zone_id = ref["id"].split("/")[-1]
+            for key, suffix in zone_suffixes:
+                path = f"{BOSCHCOM_ENDPOINT_ZONES}/{zone_id}{suffix}"
+                phase2_endpoints.append(path)
+                phase2_mapping.append((ref, key))
+
+        # Device endpoints
+        device_suffixes = [
+            ("childLock", BOSCHCOM_ENDPOINT_CHILD_LOCK),
+            ("roomtemperature", BOSCHCOM_ENDPOINT_DEVICE_ROOM_TEMP),
+            ("actualHumidity", BOSCHCOM_ENDPOINT_DEVICE_HUMIDITY),
+            ("sgtin", BOSCHCOM_ENDPOINT_DEVICE_SGTIN),
+            ("type", BOSCHCOM_ENDPOINT_DEVICE_TYPE),
+            ("signal", BOSCHCOM_ENDPOINT_DEVICE_SIGNAL),
+            ("rfConnectionStatus", BOSCHCOM_ENDPOINT_DEVICE_RF_STATUS),
+            ("battery", BOSCHCOM_ENDPOINT_DEVICE_BATTERY),
+            ("zoneId", BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID),
+            ("assignedHC", BOSCHCOM_ENDPOINT_DEVICE_ASSIGNED_HC),
+            ("operationMode", BOSCHCOM_ENDPOINT_DEVICE_OPERATION_MODE),
+            (
+                "currentRoomSetpoint",
+                BOSCHCOM_ENDPOINT_DEVICE_CURRENT_ROOM_SETPOINT,
+            ),
+        ]
+        for ref in device_refs:
+            dev_id = ref["id"].split("/")[-1]
+            for key, suffix in device_suffixes:
+                path = f"{BOSCHCOM_ENDPOINT_DEVICES}/{dev_id}{suffix}"
+                phase2_endpoints.append(path)
+                phase2_mapping.append((ref, key))
+
+        # Execute phase 2 bulk request
+        if phase2_endpoints:
+            phase2_result = await self.async_request_bulk(device_id, phase2_endpoints)
+            phase2_bulk = phase2_result or {}
+
+            for i, (ref, key) in enumerate(phase2_mapping):
+                ref[key] = phase2_bulk.get(phase2_endpoints[i])
+
+        # === DHW temperature levels (depend on phase 2 results) ===
+        phase3_endpoints: list[str] = []
+        phase3_mapping: list[tuple[dict[str, Any], str]] = []
+
+        for ref in dhw_refs:
+            ref["tempLevel"] = {}
+            dhw_id = ref["id"].split("/")[-1]
+            ctl = ref.get("currentTemperatureLevel") or {}
+            for value in ctl.get("allowedValues", []):
+                if value != "off":
+                    path = (
+                        f"{BOSCHCOM_ENDPOINT_DHW_CIRCUITS}/{dhw_id}"
+                        f"{BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL}/{value}"
+                    )
+                    phase3_endpoints.append(path)
+                    phase3_mapping.append((ref, value))
+
+        if phase3_endpoints:
+            phase3_result = await self.async_request_bulk(device_id, phase3_endpoints)
+            phase3_bulk = phase3_result or {}
+            for i, (ref, value) in enumerate(phase3_mapping):
+                ref["tempLevel"][value] = phase3_bulk.get(phase3_endpoints[i])
+
+        # === DHW + HC consumption (POST-based bulk calls) ===
+        consumption_coros: list[Any] = []
+        consumption_targets: list[tuple[dict[str, Any], str]] = []
+
+        for ref in dhw_refs:
+            for date_fmt, key in [
+                ("%Y-%m-%d", "dayconsumption"),
+                ("%Y-%m", "monthconsumption"),
+                ("%Y", "yearconsumption"),
+            ]:
+                consumption_coros.append(
+                    self.async_get_consumption(
+                        device_id, "dhw", today.strftime(date_fmt)
+                    )
                 )
+                consumption_targets.append((ref, key))
 
-                (
-                    ref["dayconsumption"],
-                    ref["monthconsumption"],
-                    ref["yearconsumption"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y-%m-%d")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y-%m")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y")
-                        )
-                    ),
+        for ref in hc_refs:
+            for date_fmt, key in [
+                ("%Y-%m-%d", "dayconsumption"),
+                ("%Y-%m", "monthconsumption"),
+                ("%Y", "yearconsumption"),
+            ]:
+                consumption_coros.append(
+                    self.async_get_consumption(
+                        device_id, "ch", today.strftime(date_fmt)
+                    )
                 )
+                consumption_targets.append((ref, key))
 
-            await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
-        else:
+        if consumption_coros:
+            consumption_results = await asyncio.gather(*consumption_coros)
+            for (ref, key), result in zip(
+                consumption_targets, consumption_results, strict=True
+            ):
+                ref[key] = result
+
+        # Handle empty refs
+        if not dhw_refs:
+            dhw_circuits["references"] = {}
+        if not hc_refs:
             heating_circuits["references"] = {}
-
-        vent_refs = (ventilation or {}).get("references", [])
-        if vent_refs:
-
-            async def populate_vent(ref: dict[str, Any]) -> None:
-                zone_id = ref["id"].split("/")[-1]
-                (
-                    ref["exhaustFanLevel"],
-                    ref["maxIndoorAirQuality"],
-                    ref["maxRelativeHumidity"],
-                    ref["operationMode"],
-                    ref["exhaustTemp"],
-                    ref["extractTemp"],
-                    ref["internalAirQuality"],
-                    ref["internalHumidity"],
-                    ref["outdoorTemp"],
-                    ref["supplyTemp"],
-                    ref["summerBypassEnable"],
-                    ref["summerBypassDuration"],
-                    ref["demandindoorAirQuality"],
-                    ref["demandrelativeHumidity"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_humidity(device_id, zone_id)
-                    ),
-                    limited_call(self.async_get_ventilation_mode(device_id, zone_id)),
-                    limited_call(
-                        self.async_get_ventilation_exhaust_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_extract_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_internal_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_internal_humidity(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_outdoor_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_supply_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_enable(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_duration(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_demand_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_demand_humidity(device_id, zone_id)
-                    ),
-                )
-
-            await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))
-        else:
+        if not vent_refs:
             vent_refs = {}
-
-        zone_refs = (zones or {}).get("references", [])
-        if zone_refs:
-
-            async def populate_zone(ref: dict[str, Any]) -> None:
-                zone_id = ref["id"].split("/")[-1]
-                (
-                    ref["userMode"],
-                    ref["tempSetpoint"],
-                    ref["temperatureActual"],
-                    ref["manualTemperatureHeating"],
-                ) = await asyncio.gather(
-                    limited_call(self.async_get_zone_user_mode(device_id, zone_id)),
-                    limited_call(self.async_get_zone_temp_setpoint(device_id, zone_id)),
-                    limited_call(self.async_get_zone_temp_actual(device_id, zone_id)),
-                    limited_call(
-                        self.async_get_zone_manual_temp_heating(device_id, zone_id)
-                    ),
-                )
-
-            await asyncio.gather(*(populate_zone(ref) for ref in zone_refs))
-        else:
+        if not zone_refs:
             zone_refs = {}
-
-        device_refs = (devices or {}).get("references", [])
-        if device_refs:
-
-            async def populate_device(ref: dict[str, Any]) -> None:
-                dev_id = ref["id"].split("/")[-1]
-                (
-                    ref["childLock"],
-                    ref["roomtemperature"],
-                    ref["actualHumidity"],
-                    ref["sgtin"],
-                    ref["type"],
-                    ref["signal"],
-                    ref["rfConnectionStatus"],
-                    ref["battery"],
-                    ref["zoneId"],
-                    ref["assignedHC"],
-                    ref["operationMode"],
-                    ref["currentRoomSetpoint"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_child_lock(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_room_temp(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_humidity(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_sgtin(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_type(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_signal(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_rf_status(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_battery(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_zone_id(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_assigned_hc(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_operation_mode(device_id, dev_id)
-                    ),
-                    limited_call(
-                        self.async_get_device_current_room_setpoint(
-                            device_id, dev_id
-                        )
-                    ),
-                )
-
-            await asyncio.gather(*(populate_device(ref) for ref in device_refs))
-        else:
+        if not device_refs:
             device_refs = {}
 
         return BHCDeviceK40(
