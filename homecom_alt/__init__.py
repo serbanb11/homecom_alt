@@ -61,6 +61,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID,
     BOSCHCOM_ENDPOINT_DEVICES,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+    BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED,
     BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
     BOSCHCOM_ENDPOINT_DWH_AIRBOX,
     BOSCHCOM_ENDPOINT_DWH_CHARGE,
@@ -85,6 +86,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_FIRMWARE,
     BOSCHCOM_ENDPOINT_FULL_POWER,
     BOSCHCOM_ENDPOINT_GATEWAYS,
+    BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM,
     BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_HC_CONTROL,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
@@ -94,6 +96,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN,
     BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
     BOSCHCOM_ENDPOINT_HC_HEATING_TYPE,
+    BOSCHCOM_ENDPOINT_HC_HOLIDAY_ACTIVATED,
     BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
     BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
@@ -104,7 +107,19 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
     BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+    BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE,
+    BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_A,
+    BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_B,
+    BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_MODE,
+    BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_COMFORT2,
+    BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_ECO,
+    BOSCHCOM_ENDPOINT_HC_TEMPERATURE_LEVELS,
+    BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
+    BOSCHCOM_ENDPOINT_HM_DHW_MODE,
+    BOSCHCOM_ENDPOINT_HM_FIX_TEMP,
+    BOSCHCOM_ENDPOINT_HM_HC_MODE,
+    BOSCHCOM_ENDPOINT_HM_START_STOP,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
@@ -126,10 +141,28 @@ from .const import (
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_PV_LIST,
+    BOSCHCOM_ENDPOINT_RRC2_DHW,
+    BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP,
+    BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM,
+    BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME,
+    BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE,
+    BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID,
+    BOSCHCOM_ENDPOINT_RRC2_HC,
+    BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP,
+    BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY,
+    BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION,
+    BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON,
+    BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME,
+    BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL,
+    BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT,
+    BOSCHCOM_ENDPOINT_RRC2_ZONES,
+    BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS,
     BOSCHCOM_ENDPOINT_STANDARD,
     BOSCHCOM_ENDPOINT_SWITCH,
     BOSCHCOM_ENDPOINT_SWITCH_ENABLE,
     BOSCHCOM_ENDPOINT_SWITCH_PROGRAM,
+    BOSCHCOM_ENDPOINT_SYSTEM_BUS,
+    BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES,
     BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_TEMP,
     BOSCHCOM_ENDPOINT_TIME,
@@ -149,6 +182,9 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_FLAP_POWER,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_MIN_SUPPLY,
+    BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING,
     BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_WIFI_STATE,
     BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
@@ -177,8 +213,10 @@ from .exceptions import (
 from .model import (
     BHCDeviceCommodule,
     BHCDeviceGeneric,
+    BHCDeviceIcom,
     BHCDeviceK40,
     BHCDeviceRac,
+    BHCDeviceRrc2,
     BHCDeviceWddw2,
     ConnectionOptions,
 )
@@ -1850,9 +1888,9 @@ class HomeComK40(HomeComAlt):
         return await self._to_data(response)
 
     async def async_set_ventilation_summer_duration(
-        self, device_id: str, zone_id: str, value: str
+        self, device_id: str, zone_id: str, value: float
     ) -> Any:
-        """Set ventilation summer duration."""
+        """Set ventilation summer duration in hours (floatValue, 1..12)."""
         await self.get_token()
         await self._async_http_request(
             "put",
@@ -1863,9 +1901,60 @@ class HomeComK40(HomeComAlt):
             + "/"
             + zone_id
             + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
-            {"value": value},
+            {"value": round(value, 1)},
             1,
         )
+
+    async def async_get_ventilation_summer_flap_power(
+        self, device_id: str, zone_id: str
+    ) -> Any:
+        """Get ventilation summer-bypass flap power (auto-state diagnostic)."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_FLAP_POWER,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_summer_min_supply(
+        self, device_id: str, zone_id: str
+    ) -> Any:
+        """Get ventilation summer-bypass minimum supply temperature threshold."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_MIN_SUPPLY,
+        )
+        return await self._to_data(response)
+
+    async def async_get_ventilation_summer_passive_cooling(
+        self, device_id: str, zone_id: str
+    ) -> Any:
+        """Get ventilation summer-bypass passive-cooling setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_VENTILATION
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING,
+        )
+        return await self._to_data(response)
 
     async def async_get_ventilation_demand_quality(
         self, device_id: str, zone_id: str
@@ -2900,6 +2989,9 @@ class HomeComK40(HomeComAlt):
                     ref["supplyTemp"],
                     ref["summerBypassEnable"],
                     ref["summerBypassDuration"],
+                    ref["summerBypassFlapPower"],
+                    ref["summerBypassMinSupply"],
+                    ref["summerBypassPassiveCooling"],
                     ref["demandindoorAirQuality"],
                     ref["demandrelativeHumidity"],
                 ) = await asyncio.gather(
@@ -2936,6 +3028,17 @@ class HomeComK40(HomeComAlt):
                     ),
                     limited_call(
                         self.async_get_ventilation_summer_duration(device_id, zone_id)
+                    ),
+                    limited_call(
+                        self.async_get_ventilation_summer_flap_power(device_id, zone_id)
+                    ),
+                    limited_call(
+                        self.async_get_ventilation_summer_min_supply(device_id, zone_id)
+                    ),
+                    limited_call(
+                        self.async_get_ventilation_summer_passive_cooling(
+                            device_id, zone_id
+                        )
                     ),
                     limited_call(
                         self.async_get_ventilation_demand_quality(device_id, zone_id)
@@ -3032,6 +3135,678 @@ class HomeComK40(HomeComAlt):
             energy_gas_unit=energy_gas_unit,
             indoor_humidity=indoor_humidity,
             devices=device_refs,
+        )
+
+
+class HomeComIcom(HomeComK40):
+    """HomeCom client for icom heat pumps.
+
+    Icom shares the /heatingCircuits, /dhwCircuits, /ventilation namespaces
+    with K40 but exposes a much smaller endpoint set (no boost/away/cooling
+    extras, no DHW charge, no heat-source telemetry beyond hs1/type+info, no
+    recordings/energy, no humidity, no devices/zones, no PV/silentMode/etc).
+    See homecom-api-endpoints.md sections "ICOM" vs "K30/K40".
+    """
+
+    async def async_get_heat_sources_info(self, device_id: str) -> Any:
+        """Get the /heatSources/info payload."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + "/resource/heatSources/info",
+        )
+        return await self._to_data(response)
+
+    async def async_get_solar_circuits(self, device_id: str) -> Any:
+        """List solar circuits."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_info(self, device_id: str) -> Any:
+        """Get system info payload."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_INFO,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_bus(self, device_id: str) -> Any:
+        """Get the system bus type."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_BUS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_holiday_modes(self, device_id: str) -> Any:
+        """List system holiday-mode entries."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES,
+        )
+        return await self._to_data(response)
+
+    async def _async_get_hm_field(self, device_id: str, hm_id: str, suffix: str) -> Any:
+        """Read one sub-resource of a holiday-mode entry."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES
+            + "/"
+            + hm_id
+            + suffix,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hm_dhw_mode(self, device_id: str, hm_id: str) -> Any:
+        """DHW mode for a holiday-mode entry."""
+        return await self._async_get_hm_field(
+            device_id, hm_id, BOSCHCOM_ENDPOINT_HM_DHW_MODE
+        )
+
+    async def async_get_hm_hc_mode(self, device_id: str, hm_id: str) -> Any:
+        """HC mode for a holiday-mode entry."""
+        return await self._async_get_hm_field(
+            device_id, hm_id, BOSCHCOM_ENDPOINT_HM_HC_MODE
+        )
+
+    async def async_get_hm_fix_temperature(self, device_id: str, hm_id: str) -> Any:
+        """Get fixed temperature for a holiday-mode entry."""
+        return await self._async_get_hm_field(
+            device_id, hm_id, BOSCHCOM_ENDPOINT_HM_FIX_TEMP
+        )
+
+    async def async_get_hm_start_stop(self, device_id: str, hm_id: str) -> Any:
+        """Start/stop dates for a holiday-mode entry."""
+        return await self._async_get_hm_field(
+            device_id, hm_id, BOSCHCOM_ENDPOINT_HM_START_STOP
+        )
+
+    async def _async_get_hc_subresource(
+        self, device_id: str, hc_id: str, suffix: str
+    ) -> Any:
+        """Read one sub-resource of a heating-circuit entry."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + suffix,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hc_holiday_activated(self, device_id: str, hc_id: str) -> Any:
+        """Per-HC holiday-mode activated flag."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_HOLIDAY_ACTIVATED
+        )
+
+    async def async_get_hc_temperature_levels(self, device_id: str, hc_id: str) -> Any:
+        """HC temperature-level presets root."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TEMPERATURE_LEVELS
+        )
+
+    async def async_get_hc_temp_level_comfort2(self, device_id: str, hc_id: str) -> Any:
+        """HC comfort2 temperature level."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_COMFORT2
+        )
+
+    async def async_get_hc_temp_level_eco(self, device_id: str, hc_id: str) -> Any:
+        """HC eco temperature level."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_ECO
+        )
+
+    async def async_get_hc_active_switch_program(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """HC active switch program."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM
+        )
+
+    async def async_get_hc_switch_program_a(self, device_id: str, hc_id: str) -> Any:
+        """HC switch program A blob."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_A
+        )
+
+    async def async_get_hc_switch_program_b(self, device_id: str, hc_id: str) -> Any:
+        """HC switch program B blob."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_B
+        )
+
+    async def async_get_hc_switch_program_mode(self, device_id: str, hc_id: str) -> Any:
+        """HC switch program mode."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_MODE
+        )
+
+    async def async_get_hc_temporary_room_setpoint(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """HC temporary room setpoint."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT
+        )
+
+    async def async_get_hc_suwi_switch_mode(self, device_id: str, hc_id: str) -> Any:
+        """HC summer/winter switch mode."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE
+        )
+
+    async def async_get_dhw_holiday_activated(self, device_id: str, dhw_id: str) -> Any:
+        """Per-DHW holiday-mode activated flag."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED,
+        )
+        return await self._to_data(response)
+
+    async def async_update(  # type: ignore[override]
+        self, device_id: str
+    ) -> BHCDeviceIcom:
+        """Fetch the icom-supported endpoint subset and return a BHCDeviceIcom.
+
+        Returns a different dataclass type than the inherited K40 method, so
+        mypy needs to ignore the variance here. Treat coordinator code as
+        polymorphic over BHCDeviceK40 | BHCDeviceIcom.
+        """
+        await self.get_token()
+
+        sem = asyncio.Semaphore(MAX_CONCURRENT)
+
+        async def limited_call(coro: Any) -> Any:
+            async with sem:
+                return await coro
+
+        firmware = await self.async_get_firmware(device_id)
+
+        (
+            notifications,
+            heating_circuits,
+            dhw_circuits,
+            solar_circuits,
+            ventilation,
+            holiday_modes,
+            system_info,
+            system_bus,
+            hs_type,
+            hs_info,
+        ) = await asyncio.gather(
+            limited_call(self.async_get_notifications(device_id)),
+            limited_call(self.async_get_hc(device_id)),
+            limited_call(self.async_get_dhw(device_id)),
+            limited_call(self.async_get_solar_circuits(device_id)),
+            limited_call(self.async_get_ventilation_zones(device_id)),
+            limited_call(self.async_get_system_holiday_modes(device_id)),
+            limited_call(self.async_get_system_info(device_id)),
+            limited_call(self.async_get_system_bus(device_id)),
+            limited_call(self.async_get_hs_type(device_id)),
+            limited_call(self.async_get_heat_sources_info(device_id)),
+        )
+
+        heat_sources = {
+            "type": hs_type or {},
+            "info": hs_info or {},
+        }
+
+        # Heating circuits — fetch per-HC fields supported by icom.
+        heating_circuits = heating_circuits or {}
+        hc_refs = heating_circuits.get("references", [])
+        if hc_refs:
+
+            async def populate_hc(ref: dict[str, Any]) -> None:
+                hc_id = ref["id"].split("/")[-1]
+                (
+                    ref["operationMode"],
+                    ref["controlType"],
+                    ref["currentSuWiMode"],
+                    ref["suWiSwitchMode"],
+                    ref["currentRoomSetpoint"],
+                    ref["manualRoomSetpoint"],
+                    ref["temporaryRoomSetpoint"],
+                    ref["roomtemperature"],
+                    ref["coolingRoomTempSetpoint"],
+                    ref["holidayActivated"],
+                    ref["temperatureLevels"],
+                    ref["temperatureLevelComfort2"],
+                    ref["temperatureLevelEco"],
+                    ref["activeSwitchProgram"],
+                    ref["switchProgramMode"],
+                    ref["switchProgramA"],
+                    ref["switchProgramB"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_hc_operation_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_control_type(device_id, hc_id)),
+                    limited_call(self.async_get_hc_suwi_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_suwi_switch_mode(device_id, hc_id)),
+                    limited_call(
+                        self.async_get_hc_current_room_setpoint(device_id, hc_id)
+                    ),
+                    limited_call(
+                        self.async_get_hc_manual_room_setpoint(device_id, hc_id)
+                    ),
+                    limited_call(
+                        self.async_get_hc_temporary_room_setpoint(device_id, hc_id)
+                    ),
+                    limited_call(self.async_get_hc_room_temp(device_id, hc_id)),
+                    limited_call(
+                        self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
+                    ),
+                    limited_call(self.async_get_hc_holiday_activated(device_id, hc_id)),
+                    limited_call(
+                        self.async_get_hc_temperature_levels(device_id, hc_id)
+                    ),
+                    limited_call(
+                        self.async_get_hc_temp_level_comfort2(device_id, hc_id)
+                    ),
+                    limited_call(self.async_get_hc_temp_level_eco(device_id, hc_id)),
+                    limited_call(
+                        self.async_get_hc_active_switch_program(device_id, hc_id)
+                    ),
+                    limited_call(
+                        self.async_get_hc_switch_program_mode(device_id, hc_id)
+                    ),
+                    limited_call(self.async_get_hc_switch_program_a(device_id, hc_id)),
+                    limited_call(self.async_get_hc_switch_program_b(device_id, hc_id)),
+                )
+
+            await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
+        else:
+            heating_circuits["references"] = []
+
+        # DHW circuits — only listing + per-circuit holiday flag.
+        dhw_circuits = dhw_circuits or {}
+        dhw_refs = dhw_circuits.get("references", [])
+        if dhw_refs:
+
+            async def populate_dhw(ref: dict[str, Any]) -> None:
+                dhw_id = ref["id"].split("/")[-1]
+                ref["holidayActivated"] = await limited_call(
+                    self.async_get_dhw_holiday_activated(device_id, dhw_id)
+                )
+
+            await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
+        else:
+            dhw_circuits["references"] = []
+
+        # Solar circuits — listing only (per spec).
+        solar_circuits = solar_circuits or {}
+        solar_refs = solar_circuits.get("references", [])
+
+        # Ventilation — only fan level + operation mode per zone.
+        ventilation = ventilation or {}
+        vent_refs = ventilation.get("references", [])
+        if vent_refs:
+
+            async def populate_vent(ref: dict[str, Any]) -> None:
+                zone_id = ref["id"].split("/")[-1]
+                (
+                    ref["exhaustFanLevel"],
+                    ref["operationMode"],
+                ) = await asyncio.gather(
+                    limited_call(
+                        self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
+                    ),
+                    limited_call(self.async_get_ventilation_mode(device_id, zone_id)),
+                )
+
+            await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))
+
+        # Holiday modes — for each hm{N} fetch dhwMode/hcMode/fixTemperature/startStop.
+        holiday_modes = holiday_modes or {}
+        hm_refs = holiday_modes.get("references", [])
+        if hm_refs:
+
+            async def populate_hm(ref: dict[str, Any]) -> None:
+                hm_id = ref["id"].split("/")[-1]
+                (
+                    ref["dhwMode"],
+                    ref["hcMode"],
+                    ref["fixTemperature"],
+                    ref["startStop"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_hm_dhw_mode(device_id, hm_id)),
+                    limited_call(self.async_get_hm_hc_mode(device_id, hm_id)),
+                    limited_call(self.async_get_hm_fix_temperature(device_id, hm_id)),
+                    limited_call(self.async_get_hm_start_stop(device_id, hm_id)),
+                )
+
+            await asyncio.gather(*(populate_hm(ref) for ref in hm_refs))
+
+        return BHCDeviceIcom(
+            device=device_id,
+            firmware=firmware,
+            notifications=(notifications or {}).get("values") or [],
+            holiday_mode=hm_refs,
+            heat_sources=heat_sources,
+            dhw_circuits=dhw_refs,
+            heating_circuits=hc_refs,
+            solar_circuits=solar_refs,
+            ventilation=vent_refs,
+            system_info=system_info or {},
+            system_bus=system_bus or {},
+        )
+
+
+class HomeComRrc2(HomeComAlt):
+    """HomeCom client for rrc2 (Remeha Remote Control) gateways.
+
+    Distinct URL scheme from K40 — uses /zones, /hc, /dhw paths and a much
+    smaller surface (no heatingCircuits, no system/info, no recordings).
+    """
+
+    def __init__(
+        self,
+        session: ClientSession,
+        options: Any,
+        device_id: str,
+        auth_provider: bool,
+    ) -> None:
+        """Initialize Rrc2 device."""
+        super().__init__(session, options, auth_provider)
+        self.device_id = device_id
+        self.device_type = "rrc2"
+
+    async def async_get_rrc2_zones(self, device_id: str) -> Any:
+        """List rrc2 zones."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_ZONES,
+        )
+        return await self._to_data(response)
+
+    async def _async_get_zone_field(
+        self, device_id: str, zone_id: str, suffix: str
+    ) -> Any:
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_ZONES
+            + "/"
+            + zone_id
+            + suffix,
+        )
+        return await self._to_data(response)
+
+    async def async_get_zone_temp_actual(self, device_id: str, zone_id: str) -> Any:
+        """Actual zone temperature."""
+        return await self._async_get_zone_field(
+            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL
+        )
+
+    async def async_get_zone_temp_heating_setpoint(
+        self, device_id: str, zone_id: str
+    ) -> Any:
+        """Zone heating setpoint."""
+        return await self._async_get_zone_field(
+            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT
+        )
+
+    async def async_get_zone_name(self, device_id: str, zone_id: str) -> Any:
+        """Zone name."""
+        return await self._async_get_zone_field(
+            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME
+        )
+
+    async def async_get_zone_icon(self, device_id: str, zone_id: str) -> Any:
+        """Zone icon identifier."""
+        return await self._async_get_zone_field(
+            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON
+        )
+
+    async def _async_get_hc_field(self, device_id: str, hc_id: str, suffix: str) -> Any:
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_HC
+            + "/"
+            + hc_id
+            + suffix,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hc_actual_temp(self, device_id: str, hc_id: str) -> Any:
+        """Heating circuit actual temperature (rrc2 path)."""
+        return await self._async_get_hc_field(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP
+        )
+
+    async def async_get_hc_control_key(self, device_id: str, hc_id: str) -> Any:
+        """Heating circuit control key."""
+        return await self._async_get_hc_field(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY
+        )
+
+    async def _async_get_dhw_field(
+        self, device_id: str, dhw_id: str, suffix: str
+    ) -> Any:
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_DHW
+            + "/"
+            + dhw_id
+            + suffix,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_actual_temp(self, device_id: str, dhw_id: str) -> Any:
+        """DHW actual temperature (rrc2 path)."""
+        return await self._async_get_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP
+        )
+
+    async def async_get_dhw_hot_water_system(self, device_id: str, dhw_id: str) -> Any:
+        """DHW hot water system info."""
+        return await self._async_get_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM
+        )
+
+    async def async_get_gateway_uuid(self, device_id: str) -> Any:
+        """Gateway UUID."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID,
+        )
+        return await self._to_data(response)
+
+    async def async_get_gateway_time(self, device_id: str) -> Any:
+        """Gateway current time."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME,
+        )
+        return await self._to_data(response)
+
+    async def async_get_gateway_timezone(self, device_id: str) -> Any:
+        """Gateway timezone."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_location(self, device_id: str) -> Any:
+        """System location coordinates."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION,
+        )
+        return await self._to_data(response)
+
+    async def async_update(self, device_id: str) -> BHCDeviceRrc2:
+        """Fetch the rrc2-supported endpoint subset and return a BHCDeviceRrc2."""
+        await self.get_token()
+
+        sem = asyncio.Semaphore(MAX_CONCURRENT)
+
+        async def limited_call(coro: Any) -> Any:
+            async with sem:
+                return await coro
+
+        firmware = await self.async_get_firmware(device_id)
+
+        (
+            notifications,
+            zones,
+            gw_uuid,
+            gw_time,
+            gw_timezone,
+            system_location,
+        ) = await asyncio.gather(
+            limited_call(self.async_get_notifications(device_id)),
+            limited_call(self.async_get_rrc2_zones(device_id)),
+            limited_call(self.async_get_gateway_uuid(device_id)),
+            limited_call(self.async_get_gateway_time(device_id)),
+            limited_call(self.async_get_gateway_timezone(device_id)),
+            limited_call(self.async_get_system_location(device_id)),
+        )
+
+        zones = zones or {}
+        zone_refs = zones.get("references", [])
+        hc_refs: list[dict[str, Any]] = []
+        dhw_refs: list[dict[str, Any]] = []
+
+        if zone_refs:
+
+            async def populate_zone(ref: dict[str, Any]) -> None:
+                zone_id = ref["id"].split("/")[-1]
+                (
+                    ref["zoneTemperatureActual"],
+                    ref["zoneTemperatureHeatingSetpoint"],
+                    ref["name"],
+                    ref["icon"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_zone_temp_actual(device_id, zone_id)),
+                    limited_call(
+                        self.async_get_zone_temp_heating_setpoint(device_id, zone_id)
+                    ),
+                    limited_call(self.async_get_zone_name(device_id, zone_id)),
+                    limited_call(self.async_get_zone_icon(device_id, zone_id)),
+                )
+
+            await asyncio.gather(*(populate_zone(ref) for ref in zone_refs))
+
+            # rrc2 returns hc{N} and dhw{N} ids implicit per zone — derive a
+            # synthetic listing by scanning zone metadata. Real installs may
+            # have only one of each; we surface them as separate refs so HA
+            # can wire HC/DHW entities.
+            hc_refs = [{"id": f"/hc/hc{i}"} for i in range(1, len(zone_refs) + 1)][:1]
+            dhw_refs = [{"id": "/dhw/dhw1"}]
+
+            async def populate_hc(ref: dict[str, Any]) -> None:
+                hc_id = ref["id"].split("/")[-1]
+                (
+                    ref["actualTemperature"],
+                    ref["controlKey"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_hc_actual_temp(device_id, hc_id)),
+                    limited_call(self.async_get_hc_control_key(device_id, hc_id)),
+                )
+
+            async def populate_dhw(ref: dict[str, Any]) -> None:
+                dhw_id = ref["id"].split("/")[-1]
+                (
+                    ref["actualTemperature"],
+                    ref["hotWaterSystem"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_hot_water_system(device_id, dhw_id)
+                    ),
+                )
+
+            await asyncio.gather(
+                *(populate_hc(ref) for ref in hc_refs),
+                *(populate_dhw(ref) for ref in dhw_refs),
+            )
+
+        gateway_info = {
+            "uuid": gw_uuid or {},
+            "time": gw_time or {},
+            "timezone": gw_timezone or {},
+        }
+
+        return BHCDeviceRrc2(
+            device=device_id,
+            firmware=firmware,
+            notifications=(notifications or {}).get("values") or [],
+            zones=zone_refs,
+            heating_circuits=hc_refs,
+            dhw_circuits=dhw_refs,
+            gateway_info=gateway_info,
+            system_location=system_location or {},
         )
 
 

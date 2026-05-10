@@ -61,6 +61,44 @@ class BHCDeviceK40:
 
 
 @dataclass(frozen=True)
+class BHCDeviceIcom:
+    """Data class for icom heat-pump BHC device.
+
+    Reflects the trimmed endpoint surface in homecom-api-endpoints.md:
+    no away/power_limitation/outdoor_t1/zones/flame_indication/devices/recordings.
+    """
+
+    device: str | None
+    firmware: list | None
+    notifications: list | None
+    holiday_mode: list | None
+    heat_sources: dict | None
+    dhw_circuits: list | None
+    heating_circuits: list | None
+    solar_circuits: list | None
+    ventilation: list | None
+    system_info: dict | None
+    system_bus: dict | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceRrc2:
+    """Data class for rrc2 (Remeha Remote Control) BHC device.
+
+    Distinct URL scheme from K40 — uses /zones, /hc, /dhw (not /heatingCircuits).
+    """
+
+    device: str | None
+    firmware: list | None
+    notifications: list | None
+    zones: list | None
+    heating_circuits: list | None
+    dhw_circuits: list | None
+    gateway_info: dict | None
+    system_location: dict | None
+
+
+@dataclass(frozen=True)
 class BHCDeviceWddw2:
     """Data class for wddw2 BHC device."""
 

@@ -23,8 +23,10 @@ from homecom_alt import (
     HomeComAlt,
     HomeComCommodule,
     HomeComGeneric,
+    HomeComIcom,
     HomeComK40,
     HomeComRac,
+    HomeComRrc2,
     HomeComWddw2,
     NotRespondingError,
 )
@@ -1289,7 +1291,27 @@ async def test_k40_async_update_with_ventilation() -> None:
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912
+    vent_substring_values: dict[str, object] = {
+        "exhaustFanLevel": {"value": 3},
+        "maxIndoorAirQuality": {"value": 80},
+        "maxRelativeHumidity": {"value": 60},
+        "operationMode": {"value": "auto"},
+        "exhaustTemp": {"value": 22},
+        "extractTemp": {"value": 23},
+        "internalAirQuality": {"value": 90},
+        "internalHumidity": {"value": 50},
+        "outdoorTemp": {"value": 5},
+        "supplyTemp": {"value": 20},
+        "summerBypass/enable": {"value": "off"},
+        "summerBypass/duration": {"value": 8},
+        "summerBypass/flapPower": {"value": 100},
+        "summerBypass/minSupplyTemperature": {"value": 18},
+        "summerBypass/passiveCoolingSetpoint": {"value": 24},
+        "demand/indoorAirQuality": {"value": 70},
+        "demand/relativeHumidity": {"value": 55},
+    }
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
         if "notifications" in url:
             return _mock_json_response({"values": []})
         if url.endswith("/resource/dhwCircuits"):
@@ -1297,39 +1319,11 @@ async def test_k40_async_update_with_ventilation() -> None:
         if url.endswith("/resource/heatingCircuits"):
             return _mock_json_response({"references": []})
         if url.endswith("/resource/ventilation"):
-            return _mock_json_response(
-                {
-                    "references": [{"id": "/ventilation/zone1"}],
-                }
-            )
-        if "ventilation" in url and "exhaustFanLevel" in url:
-            return _mock_json_response({"value": 3})
-        if "ventilation" in url and "maxIndoorAirQuality" in url:
-            return _mock_json_response({"value": 80})
-        if "ventilation" in url and "maxRelativeHumidity" in url:
-            return _mock_json_response({"value": 60})
-        if "ventilation" in url and "operationMode" in url:
-            return _mock_json_response({"value": "auto"})
-        if "ventilation" in url and "exhaustTemp" in url:
-            return _mock_json_response({"value": 22})
-        if "ventilation" in url and "extractTemp" in url:
-            return _mock_json_response({"value": 23})
-        if "ventilation" in url and "internalAirQuality" in url:
-            return _mock_json_response({"value": 90})
-        if "ventilation" in url and "internalHumidity" in url:
-            return _mock_json_response({"value": 50})
-        if "ventilation" in url and "outdoorTemp" in url:
-            return _mock_json_response({"value": 5})
-        if "ventilation" in url and "supplyTemp" in url:
-            return _mock_json_response({"value": 20})
-        if "ventilation" in url and "summerBypass/enable" in url:
-            return _mock_json_response({"value": "off"})
-        if "ventilation" in url and "summerBypass/duration" in url:
-            return _mock_json_response({"value": 120})
-        if "ventilation" in url and "demand/indoorAirQuality" in url:
-            return _mock_json_response({"value": 70})
-        if "ventilation" in url and "demand/relativeHumidity" in url:
-            return _mock_json_response({"value": 55})
+            return _mock_json_response({"references": [{"id": "/ventilation/zone1"}]})
+        if "ventilation" in url:
+            for needle, payload in vent_substring_values.items():
+                if needle in url:
+                    return _mock_json_response(payload)
         if url.endswith("/resource/zones"):
             return _mock_json_response({"references": []})
         if url.endswith("/resource/devices"):
@@ -1346,6 +1340,45 @@ async def test_k40_async_update_with_ventilation() -> None:
     assert isinstance(result.ventilation, list)
     assert len(result.ventilation) == 1
     assert result.ventilation[0]["exhaustFanLevel"] == {"value": 3}
+    assert result.ventilation[0]["summerBypassFlapPower"] == {"value": 100}
+    assert result.ventilation[0]["summerBypassMinSupply"] == {"value": 18}
+    assert result.ventilation[0]["summerBypassPassiveCooling"] == {"value": 24}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_ventilation_summer_bypass_diagnostics_getters() -> None:
+    """The new summer-bypass diagnostic getters issue GETs and parse responses."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 100})),
+    ):
+        assert await k40.async_get_ventilation_summer_flap_power(
+            DEVICE_ID, "zone1"
+        ) == {"value": 100}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 18})),
+    ):
+        assert await k40.async_get_ventilation_summer_min_supply(
+            DEVICE_ID, "zone1"
+        ) == {"value": 18}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 24})),
+    ):
+        assert await k40.async_get_ventilation_summer_passive_cooling(
+            DEVICE_ID, "zone1"
+        ) == {"value": 24}
 
     await session.close()
 
@@ -1736,8 +1769,8 @@ async def test_k40_ventilation_setters() -> None:
         assert mock_req.call_args[0][2] == {"value": "on"}
 
     with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
-        await k40.async_set_ventilation_summer_duration(DEVICE_ID, "zone1", "180")
-        assert mock_req.call_args[0][2] == {"value": "180"}
+        await k40.async_set_ventilation_summer_duration(DEVICE_ID, "zone1", 8)
+        assert mock_req.call_args[0][2] == {"value": 8}
 
     with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
         await k40.async_set_ventilation_demand_quality(DEVICE_ID, "zone1", "high")
@@ -3019,3 +3052,168 @@ async def test_async_get_firmware_calls_get_token() -> None:
     ):
         await bhc.async_get_firmware("device-123")
         mock_get_token.assert_awaited_once()
+
+
+# ===========================================================================
+# HomeComIcom — minimal smoke tests
+# ===========================================================================
+
+
+def _make_icom(session):  # noqa: ANN001, ANN202
+    return HomeComIcom(session, _make_options(), DEVICE_ID, auth_provider=False)
+
+
+@pytest.mark.asyncio
+async def test_icom_async_update_returns_bhcdeviceicom() -> None:
+    """Icom update returns a BHCDeviceIcom with expected populated fields."""
+    session = ClientSession()
+    icom = _make_icom(session)
+
+    # Order matters: most-specific first. The route function returns on the
+    # first matching needle, so listing endpoints (e.g. "/heatingCircuits")
+    # must come AFTER per-circuit subpaths (e.g. ".../operationMode").
+    icom_routes: list[tuple[str, dict[str, object]]] = [
+        ("/heatSources/info", {"value": "ok"}),
+        ("hs1/type", {"value": "heatpump"}),
+        ("/system/holidayModes/hm1/dhwMode", {"value": "off"}),
+        ("/system/holidayModes/hm1/hcMode", {"value": "off"}),
+        ("/system/holidayModes/hm1/fixTemperature", {"value": 18}),
+        ("/system/holidayModes/hm1/startStop", {"value": "1970-01-01"}),
+        (
+            "/system/holidayModes",
+            {"references": [{"id": "/system/holidayModes/hm1"}]},
+        ),
+        ("/system/info", {"value": "info"}),
+        ("/system/bus", {"value": "EMS"}),
+        ("/temperatureLevels/comfort2", {"value": 20}),
+        ("/temperatureLevels/eco", {"value": 17}),
+        ("/temperatureLevels", {"value": {}}),
+        ("/switchPrograms/A", {"value": []}),
+        ("/switchPrograms/B", {"value": []}),
+        ("/activeSwitchProgram", {"value": "A"}),
+        ("/switchProgramMode", {"value": "auto"}),
+        ("/holidayMode/activated", {"value": "off"}),
+        ("/cooling/roomTempSetpoint", {"value": 25}),
+        ("/currentRoomSetpoint", {"value": 21}),
+        ("/manualRoomSetpoint", {"value": 22}),
+        ("/temporaryRoomSetpoint", {"value": 23}),
+        ("/roomtemperature", {"value": 20.5}),
+        ("/operationMode", {"value": "auto"}),
+        ("/controlType", {"value": "outdoor"}),
+        ("/currentSuWiMode", {"value": "winter"}),
+        ("/suWiSwitchMode", {"value": "manual"}),
+        ("/exhaustFanLevel", {"value": "min"}),
+        (
+            "/heatingCircuits",
+            {"references": [{"id": "/heatingCircuits/hc1"}]},
+        ),
+        ("/dhwCircuits", {"references": [{"id": "/dhwCircuits/dhw1"}]}),
+        ("/solarCircuits", {"references": [{"id": "/solarCircuits/sc1"}]}),
+        ("/ventilation", {"references": [{"id": "/ventilation/zone1"}]}),
+    ]
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        for needle, payload in icom_routes:
+            if needle in url:
+                return _mock_json_response(payload)
+        if url.endswith("/resource/gateway/versionFirmware"):
+            return _mock_json_response({"value": "1.0"})
+        return _mock_json_response({})
+
+    with patch.object(icom, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await icom.async_update(DEVICE_ID)
+
+    assert result.device == DEVICE_ID
+    assert isinstance(result.heating_circuits, list)
+    assert len(result.heating_circuits) == 1
+    assert result.heating_circuits[0]["operationMode"] == {"value": "auto"}
+    assert result.dhw_circuits[0]["holidayActivated"] == {"value": "off"}
+    assert result.solar_circuits == [{"id": "/solarCircuits/sc1"}]
+    assert result.ventilation[0]["exhaustFanLevel"] == {"value": "min"}
+    assert result.ventilation[0]["operationMode"] == {"value": "auto"}
+    assert result.holiday_mode[0]["fixTemperature"] == {"value": 18}
+    assert result.system_info == {"value": "info"}
+    assert result.system_bus == {"value": "EMS"}
+    assert result.heat_sources == {
+        "type": {"value": "heatpump"},
+        "info": {"value": "ok"},
+    }
+
+    await session.close()
+
+
+# ===========================================================================
+# HomeComRrc2 — minimal smoke tests
+# ===========================================================================
+
+
+def _make_rrc2(session):  # noqa: ANN001, ANN202
+    return HomeComRrc2(session, _make_options(), DEVICE_ID, auth_provider=False)
+
+
+@pytest.mark.asyncio
+async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
+    """Rrc2 update returns a BHCDeviceRrc2 with zones / hc / dhw populated."""
+    session = ClientSession()
+    rrc2 = _make_rrc2(session)
+
+    rrc2_substring_values: dict[str, object] = {
+        "/zones": {"references": [{"id": "/zones/zone1"}]},
+        "zoneTemperatureActual": {"value": 20.0},
+        "zoneTemperatureHeatingSetpoint": {"value": 21.0},
+        "/hc/hc1/actualTemperature": {"value": 19.5},
+        "/hc/hc1/controlKey": {"value": "1234"},
+        "/dhw/dhw1/actualTemperature": {"value": 50.0},
+        "/dhw/dhw1/hotWaterSystem": {"value": "boiler"},
+        "/gateway/uuid": {"value": "abc-123"},
+        "/gateway/time/current": {"value": "2026-05-10T10:00:00Z"},
+        "/gateway/time/timeZone": {"value": "Europe/Berlin"},
+        "/system/location/coordinates": {"value": {"lat": 50, "lon": 7}},
+    }
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        # Order matters — match the most-specific paths first.
+        for needle in (
+            "/hc/hc1/actualTemperature",
+            "/hc/hc1/controlKey",
+            "/dhw/dhw1/actualTemperature",
+            "/dhw/dhw1/hotWaterSystem",
+            "/gateway/uuid",
+            "/gateway/time/current",
+            "/gateway/time/timeZone",
+            "/system/location/coordinates",
+            "zoneTemperatureActual",
+            "zoneTemperatureHeatingSetpoint",
+            "/zones/zone1/name",
+            "/zones/zone1/icon",
+            "/zones",
+        ):
+            if needle in url:
+                return _mock_json_response(rrc2_substring_values.get(needle, {}))
+        if url.endswith("/resource/gateway/versionFirmware"):
+            return _mock_json_response({"value": "1.0"})
+        return _mock_json_response({})
+
+    with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await rrc2.async_update(DEVICE_ID)
+
+    assert result.device == DEVICE_ID
+    assert len(result.zones) == 1
+    assert result.zones[0]["zoneTemperatureActual"] == {"value": 20.0}
+    assert result.zones[0]["zoneTemperatureHeatingSetpoint"] == {"value": 21.0}
+    assert result.heating_circuits[0]["actualTemperature"] == {"value": 19.5}
+    assert result.heating_circuits[0]["controlKey"] == {"value": "1234"}
+    assert result.dhw_circuits[0]["actualTemperature"] == {"value": 50.0}
+    assert result.dhw_circuits[0]["hotWaterSystem"] == {"value": "boiler"}
+    assert result.gateway_info == {
+        "uuid": {"value": "abc-123"},
+        "time": {"value": "2026-05-10T10:00:00Z"},
+        "timezone": {"value": "Europe/Berlin"},
+    }
+    assert result.system_location == {"value": {"lat": 50, "lon": 7}}
+
+    await session.close()

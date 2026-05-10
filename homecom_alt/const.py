@@ -169,6 +169,13 @@ BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY: Final[str] = (
 )
 BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE: Final[str] = "/summerBypass/enable"
 BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION: Final[str] = "/summerBypass/duration"
+BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_FLAP_POWER: Final[str] = "/summerBypass/flapPower"
+BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_MIN_SUPPLY: Final[str] = (
+    "/summerBypass/minSupplyTemperature"
+)
+BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING: Final[str] = (
+    "/summerBypass/passiveCoolingSetpoint"
+)
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY: Final[str] = "/demand/indoorAirQuality"
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY: Final[str] = "/demand/relativeHumidity"
 
@@ -229,6 +236,48 @@ BOSCHCOM_ENDPOINT_CP_CMD_PAUSE: Final[str] = "/cmd/pause"
 BOSCHCOM_ENDPOINT_CP_CMD_LIMIT: Final[str] = "/cmd/limit"
 BOSCHCOM_ENDPOINT_ETH0_STATE: Final[str] = "/resource/gateway/eth0/state"
 BOSCHCOM_ENDPOINT_WIFI_STATE: Final[str] = "/resource/gateway/wifi/state"
+
+# Icom-specific endpoints (subset of K40 namespace plus a few extras).
+BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS: Final[str] = "/resource/solarCircuits"
+BOSCHCOM_ENDPOINT_SYSTEM_BUS: Final[str] = "/resource/system/bus"
+BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES: Final[str] = "/resource/system/holidayModes"
+BOSCHCOM_ENDPOINT_HM_DHW_MODE: Final[str] = "/dhwMode"
+BOSCHCOM_ENDPOINT_HM_HC_MODE: Final[str] = "/hcMode"
+BOSCHCOM_ENDPOINT_HM_FIX_TEMP: Final[str] = "/fixTemperature"
+BOSCHCOM_ENDPOINT_HM_START_STOP: Final[str] = "/startStop"
+BOSCHCOM_ENDPOINT_HC_HOLIDAY_ACTIVATED: Final[str] = "/holidayMode/activated"
+BOSCHCOM_ENDPOINT_HC_TEMPERATURE_LEVELS: Final[str] = "/temperatureLevels"
+BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_COMFORT2: Final[str] = "/temperatureLevels/comfort2"
+BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_ECO: Final[str] = "/temperatureLevels/eco"
+BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_A: Final[str] = "/switchPrograms/A"
+BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_B: Final[str] = "/switchPrograms/B"
+BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM: Final[str] = "/activeSwitchProgram"
+BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_MODE: Final[str] = "/switchProgramMode"
+BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT: Final[str] = "/temporaryRoomSetpoint"
+BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE: Final[str] = "/suWiSwitchMode"
+BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED: Final[str] = "/holidayMode/activated"
+
+# Rrc2-specific endpoints (distinct URL scheme: /zones, /hc, /dhw).
+BOSCHCOM_ENDPOINT_RRC2_ZONES: Final[str] = "/resource/zones"
+BOSCHCOM_ENDPOINT_RRC2_ZONES_LIST: Final[str] = "/resource/zones/list"
+BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL: Final[str] = "/zoneTemperatureActual"
+BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT: Final[str] = (
+    "/zoneTemperatureHeatingSetpoint"
+)
+BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME: Final[str] = "/name"
+BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON: Final[str] = "/icon"
+BOSCHCOM_ENDPOINT_RRC2_HC: Final[str] = "/resource/hc"
+BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP: Final[str] = "/actualTemperature"
+BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY: Final[str] = "/controlKey"
+BOSCHCOM_ENDPOINT_RRC2_DHW: Final[str] = "/resource/dhw"
+BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP: Final[str] = "/actualTemperature"
+BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM: Final[str] = "/hotWaterSystem"
+BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID: Final[str] = "/resource/gateway/uuid"
+BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME: Final[str] = "/resource/gateway/time/current"
+BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE: Final[str] = "/resource/gateway/time/timeZone"
+BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION: Final[str] = (
+    "/resource/system/location/coordinates"
+)
 
 ATTR_NOTIFICATIONS: Final[str] = "notifications"
 ATTR_FIRMWARE: Final[str] = "fw"
