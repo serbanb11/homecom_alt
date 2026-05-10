@@ -260,13 +260,20 @@ class HomeComAlt:
         self, device_id: str, endpoints: list[str]
     ) -> dict[str, Any] | None:
         """Send a single bulk request for up to 30 endpoints."""
+        # The bulk endpoint expects resource paths WITHOUT the "/resource"
+        # prefix; sending the full path returns serverStatus 403 with a null
+        # gatewayResponse. Strip on send and map back to original keys when
+        # parsing the response.
+        sent_to_original: dict[str, str] = {
+            e.removeprefix("/resource"): e for e in endpoints
+        }
         response = await self._async_http_request(
             "post",
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_BULK,
             [
                 {
                     "gatewayId": device_id,
-                    "resourcePaths": endpoints,
+                    "resourcePaths": list(sent_to_original.keys()),
                 }
             ],
             JSON,
@@ -280,7 +287,8 @@ class HomeComAlt:
             device_response = json_response[0]
             endpoint_responses = device_response["resourcePaths"]
             for endpoint_response in endpoint_responses:
-                endpoint = endpoint_response["resourcePath"]
+                returned_path = endpoint_response["resourcePath"]
+                endpoint = sent_to_original.get(returned_path, returned_path)
                 server_status = endpoint_response["serverStatus"]
                 if server_status != HTTPStatus.OK.value:
                     _LOGGER.warning("Endpoint %s returned %s", endpoint, server_status)

@@ -778,13 +778,15 @@ async def test_rac_async_update() -> None:
     session = ClientSession()
     rac = _make_rac(session)
 
+    # The real bulk endpoint echoes back resource paths WITHOUT the
+    # "/resource" prefix that callers send; the parser maps them back.
     bulk_response = _mock_json_response(
         [
             {
                 "gatewayId": DEVICE_ID,
                 "resourcePaths": [
                     {
-                        "resourcePath": "/resource/notifications",
+                        "resourcePath": "/notifications",
                         "serverStatus": 200,
                         "gatewayResponse": {
                             "status": 200,
@@ -792,7 +794,7 @@ async def test_rac_async_update() -> None:
                         },
                     },
                     {
-                        "resourcePath": ("/resource/airConditioning/standardFunctions"),
+                        "resourcePath": "/airConditioning/standardFunctions",
                         "serverStatus": 200,
                         "gatewayResponse": {
                             "status": 200,
@@ -800,7 +802,7 @@ async def test_rac_async_update() -> None:
                         },
                     },
                     {
-                        "resourcePath": ("/resource/airConditioning/advancedFunctions"),
+                        "resourcePath": "/airConditioning/advancedFunctions",
                         "serverStatus": 200,
                         "gatewayResponse": {
                             "status": 200,
@@ -808,9 +810,7 @@ async def test_rac_async_update() -> None:
                         },
                     },
                     {
-                        "resourcePath": (
-                            "/resource/airConditioning/switchPrograms/list"
-                        ),
+                        "resourcePath": "/airConditioning/switchPrograms/list",
                         "serverStatus": 200,
                         "gatewayResponse": {
                             "status": 200,
