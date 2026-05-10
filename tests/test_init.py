@@ -74,6 +74,25 @@ def _mock_json_response(data, status=HTTPStatus.OK):  # noqa: ANN001, ANN202
     return resp
 
 
+def _build_bulk_response(resource_paths, path_resolver):  # noqa: ANN001, ANN202
+    """Build a mock bulk API response from a list of resource paths.
+
+    path_resolver is a callable that takes a resource path string and returns
+    the payload for that path.
+    """
+    response_paths = []
+    for path in resource_paths:
+        payload = path_resolver(path)
+        response_paths.append(
+            {
+                "resourcePath": path,
+                "serverStatus": 200,
+                "gatewayResponse": {"status": 200, "payload": payload},
+            }
+        )
+    return [{"gatewayId": DEVICE_ID, "resourcePaths": response_paths}]
+
+
 # ===========================================================================
 # Base class - HTTP layer (existing tests, kept as-is with minor DRY-up)
 # ===========================================================================
@@ -755,24 +774,57 @@ def _make_rac(session):  # noqa: ANN001, ANN202
 
 @pytest.mark.asyncio
 async def test_rac_async_update() -> None:
-    """Test RAC async_update returns populated device data."""
+    """Test RAC async_update returns populated device data via bulk request."""
     session = ClientSession()
     rac = _make_rac(session)
 
-    notifications_resp = _mock_json_response({"values": [{"code": 1}]})
-    standard_resp = _mock_json_response({"references": [{"id": "s1"}]})
-    advanced_resp = _mock_json_response({"references": [{"id": "a1"}]})
-    switch_resp = _mock_json_response({"references": [{"id": "sw1"}]})
+    bulk_response = _mock_json_response(
+        [
+            {
+                "gatewayId": DEVICE_ID,
+                "resourcePaths": [
+                    {
+                        "resourcePath": "/resource/notifications",
+                        "serverStatus": 200,
+                        "gatewayResponse": {
+                            "status": 200,
+                            "payload": {"values": [{"code": 1}]},
+                        },
+                    },
+                    {
+                        "resourcePath": ("/resource/airConditioning/standardFunctions"),
+                        "serverStatus": 200,
+                        "gatewayResponse": {
+                            "status": 200,
+                            "payload": {"references": [{"id": "s1"}]},
+                        },
+                    },
+                    {
+                        "resourcePath": ("/resource/airConditioning/advancedFunctions"),
+                        "serverStatus": 200,
+                        "gatewayResponse": {
+                            "status": 200,
+                            "payload": {"references": [{"id": "a1"}]},
+                        },
+                    },
+                    {
+                        "resourcePath": (
+                            "/resource/airConditioning/switchPrograms/list"
+                        ),
+                        "serverStatus": 200,
+                        "gatewayResponse": {
+                            "status": 200,
+                            "payload": {"references": [{"id": "sw1"}]},
+                        },
+                    },
+                ],
+            }
+        ]
+    )
 
     async def route_request(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
-        if "notifications" in url:
-            return notifications_resp
-        if "standardFunctions" in url:
-            return standard_resp
-        if "advancedFunctions" in url:
-            return advanced_resp
-        if "switchPrograms/list" in url:
-            return switch_resp
+        if "bulk" in url:
+            return bulk_response
         return _mock_json_response({})
 
     with patch.object(
@@ -2681,18 +2733,12 @@ async def test_to_data_content_type_error_returns_none() -> None:
 
 @pytest.mark.asyncio
 async def test_rac_async_update_none_endpoints() -> None:
-    """RAC async_update completes when endpoints return None."""
+    """RAC async_update completes when bulk returns None."""
     session = ClientSession()
     rac = _make_rac(session)
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
-        if "notifications" in url:
-            return _mock_json_response(None)
-        if "standardFunctions" in url:
-            return _mock_json_response(None)
-        if "advancedFunctions" in url:
-            return _mock_json_response(None)
-        if "switchPrograms/list" in url:
+        if "bulk" in url:
             return _mock_json_response(None)
         return _mock_json_response({})
 
