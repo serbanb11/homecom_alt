@@ -79,13 +79,17 @@ class BHCDeviceIcom:
     ventilation: list | None
     system_info: dict | None
     system_bus: dict | None
+    health_status: dict | None = None
+    brand: dict | None = None
 
 
 @dataclass(frozen=True)
 class BHCDeviceRrc2:
     """Data class for rrc2 (Remeha Remote Control) BHC device.
 
-    Distinct URL scheme from K40 — uses /zones, /hc, /dhw (not /heatingCircuits).
+    Per issue #78 response dumps the gateway actually serves the K40-style
+    /heatingCircuits, /dhwCircuits, /zones namespaces — only the field set
+    is trimmed.
     """
 
     device: str | None
@@ -94,6 +98,11 @@ class BHCDeviceRrc2:
     zones: list | None
     heating_circuits: list | None
     dhw_circuits: list | None
+    heat_sources: dict | None
+    away_mode: dict | None
+    outdoor_temp: dict | None
+    indoor_humidity: dict | None
+    devices: list | None
     gateway_info: dict | None
     system_location: dict | None
 
@@ -106,6 +115,8 @@ class BHCDeviceWddw2:
     firmware: list | None
     notifications: list | None
     dhw_circuits: list | None
+    heat_sources: dict | None = None
+    water_total_consumption: dict | None = None
 
 
 @dataclass(frozen=True)

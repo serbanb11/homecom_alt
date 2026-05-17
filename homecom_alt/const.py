@@ -140,6 +140,7 @@ BOSCHCOM_ENDPOINT_DHW_CIRCUITS: Final[str] = "/resource/dhwCircuits"
 BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE: Final[str] = "/operationMode"
 BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP: Final[str] = "/actualTemp"
 BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL: Final[str] = "/temperatureLevels"
+BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_HIGH: Final[str] = "/temperatureLevels/high"
 BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL: Final[str] = "/manualsetpoint"
 BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL: Final[str] = "/currentTemperatureLevel"
 BOSCHCOM_ENDPOINT_DWH_CHARGE: Final[str] = "/charge"
@@ -151,6 +152,18 @@ BOSCHCOM_ENDPOINT_DWH_FAN_SPEED: Final[str] = "/sensor/fanSpeed"
 BOSCHCOM_ENDPOINT_DWH_INLET_TEMP: Final[str] = "/inletTemperature"
 BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP: Final[str] = "/outletTemperature"
 BOSCHCOM_ENDPOINT_DWH_WATER_FLOW: Final[str] = "/sensor/waterFlow"
+BOSCHCOM_ENDPOINT_DWH_HOT_WATER_SYSTEM: Final[str] = "/hotWaterSystem"
+BOSCHCOM_ENDPOINT_DWH_STATE: Final[str] = "/state"
+BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW: Final[str] = "/extraDhw"
+BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW_DURATION: Final[str] = "/extraDhwDuration"
+BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_STATE: Final[str] = "/thermalDisinfect/state"
+BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_TIME: Final[str] = "/thermalDisinfect/time"
+BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_WEEKDAY: Final[str] = (
+    "/thermalDisinfect/weekDay"
+)
+BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_LAST_RESULT: Final[str] = (
+    "/thermalDisinfect/lastResult"
+)
 
 BOSCHCOM_ENDPOINT_VENTILATION: Final[str] = "/resource/ventilation"
 BOSCHCOM_ENDPOINT_VENTILATION_QUALITY: Final[str] = "/maxIndoorAirQuality"
@@ -194,8 +207,34 @@ BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE: Final[str] = "/nightSwitchMode"
 BOSCHCOM_ENDPOINT_HC_CONTROL: Final[str] = "/control"
 BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD: Final[str] = "/nightThreshold"
 BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE: Final[str] = "/roomInfluence"
+BOSCHCOM_ENDPOINT_HC_OPERATING_SEASON: Final[str] = "/operatingSeason"
+BOSCHCOM_ENDPOINT_HC_TYPE: Final[str] = "/type"
+BOSCHCOM_ENDPOINT_HC_TYPE_ROOM_CONTROL: Final[str] = "/typeRoomControl"
 
 BOSCHCOM_ENDPOINT_HS_FLAME: Final[str] = "/resource/heatSources/flameIndication"
+BOSCHCOM_ENDPOINT_HS_INFO: Final[str] = "/resource/heatSources/info"
+BOSCHCOM_ENDPOINT_HS_TOTAL_NUMBER_OF_STARTS: Final[str] = (
+    "/resource/heatSources/numberOfStarts"
+)
+BOSCHCOM_ENDPOINT_HS_ACTUAL_POWER: Final[str] = "/resource/heatSources/hs1/actualPower"
+BOSCHCOM_ENDPOINT_HS_POWER_PERCENTAGE: Final[str] = (
+    "/resource/heatSources/hs1/powerPercentage"
+)
+BOSCHCOM_ENDPOINT_HS_OPERATION_HOURS: Final[str] = (
+    "/resource/heatSources/hs1/operationHours"
+)
+BOSCHCOM_ENDPOINT_HS_ELECTRICITY_TOTAL_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/electricityTotalConsumption"
+)
+BOSCHCOM_ENDPOINT_DWH_WATER_TOTAL_CONSUMPTION: Final[str] = (
+    "/resource/dhwCircuits/waterTotalConsumption"
+)
+
+BOSCHCOM_ENDPOINT_SYSTEM_HEALTH_STATUS: Final[str] = "/resource/system/healthStatus"
+BOSCHCOM_ENDPOINT_SYSTEM_BRAND: Final[str] = "/resource/system/brand"
+
+BOSCHCOM_ENDPOINT_ZONE_NAME: Final[str] = "/name"
+BOSCHCOM_ENDPOINT_ZONE_ICON: Final[str] = "/icon"
 
 BOSCHCOM_ENDPOINT_ENERGY_HISTORY: Final[str] = "/resource/energy/history"
 BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY: Final[str] = "/resource/energy/historyHourly"
@@ -257,24 +296,10 @@ BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT: Final[str] = "/temporaryRoomSetpoi
 BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE: Final[str] = "/suWiSwitchMode"
 BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED: Final[str] = "/holidayMode/activated"
 
-# Rrc2-specific endpoints (distinct URL scheme: /zones, /hc, /dhw).
-BOSCHCOM_ENDPOINT_RRC2_ZONES: Final[str] = "/resource/zones"
-BOSCHCOM_ENDPOINT_RRC2_ZONES_LIST: Final[str] = "/resource/zones/list"
-BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL: Final[str] = "/zoneTemperatureActual"
-BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT: Final[str] = (
-    "/zoneTemperatureHeatingSetpoint"
-)
-BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME: Final[str] = "/name"
-BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON: Final[str] = "/icon"
-BOSCHCOM_ENDPOINT_RRC2_HC: Final[str] = "/resource/hc"
-BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP: Final[str] = "/actualTemperature"
-BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY: Final[str] = "/controlKey"
-BOSCHCOM_ENDPOINT_RRC2_DHW: Final[str] = "/resource/dhw"
-BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP: Final[str] = "/actualTemperature"
-BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM: Final[str] = "/hotWaterSystem"
 BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID: Final[str] = "/resource/gateway/uuid"
 BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME: Final[str] = "/resource/gateway/time/current"
 BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE: Final[str] = "/resource/gateway/time/timeZone"
+BOSCHCOM_ENDPOINT_RRC2_GATEWAY_WIFI_RSSI: Final[str] = "/resource/gateway/wifi/rssi"
 BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION: Final[str] = (
     "/resource/system/location/coordinates"
 )

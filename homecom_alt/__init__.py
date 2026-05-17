@@ -69,13 +69,23 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME,
     BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
     BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL,
+    BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW,
+    BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW_DURATION,
     BOSCHCOM_ENDPOINT_DWH_FAN_SPEED,
+    BOSCHCOM_ENDPOINT_DWH_HOT_WATER_SYSTEM,
     BOSCHCOM_ENDPOINT_DWH_INLET_TEMP,
     BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_STATE,
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
+    BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_HIGH,
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
+    BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_LAST_RESULT,
+    BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_STATE,
+    BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_TIME,
+    BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_WEEKDAY,
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
+    BOSCHCOM_ENDPOINT_DWH_WATER_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_ECO,
     BOSCHCOM_ENDPOINT_ENERGY_GAS_UNIT,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY,
@@ -102,6 +112,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
     BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE,
     BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD,
+    BOSCHCOM_ENDPOINT_HC_OPERATING_SEASON,
     BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE,
     BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
@@ -115,23 +126,31 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_ECO,
     BOSCHCOM_ENDPOINT_HC_TEMPERATURE_LEVELS,
     BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT,
+    BOSCHCOM_ENDPOINT_HC_TYPE,
+    BOSCHCOM_ENDPOINT_HC_TYPE_ROOM_CONTROL,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HM_DHW_MODE,
     BOSCHCOM_ENDPOINT_HM_FIX_TEMP,
     BOSCHCOM_ENDPOINT_HM_HC_MODE,
     BOSCHCOM_ENDPOINT_HM_START_STOP,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_ACTUAL_POWER,
+    BOSCHCOM_ENDPOINT_HS_ELECTRICITY_TOTAL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
+    BOSCHCOM_ENDPOINT_HS_INFO,
     BOSCHCOM_ENDPOINT_HS_MODULATION,
+    BOSCHCOM_ENDPOINT_HS_OPERATION_HOURS,
     BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
+    BOSCHCOM_ENDPOINT_HS_POWER_PERCENTAGE,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
     BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
     BOSCHCOM_ENDPOINT_HS_STARTS,
     BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
     BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
+    BOSCHCOM_ENDPOINT_HS_TOTAL_NUMBER_OF_STARTS,
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
     BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
@@ -141,27 +160,19 @@ from .const import (
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_PV_LIST,
-    BOSCHCOM_ENDPOINT_RRC2_DHW,
-    BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP,
-    BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM,
     BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME,
     BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE,
     BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID,
-    BOSCHCOM_ENDPOINT_RRC2_HC,
-    BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP,
-    BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY,
+    BOSCHCOM_ENDPOINT_RRC2_GATEWAY_WIFI_RSSI,
     BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION,
-    BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON,
-    BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME,
-    BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL,
-    BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT,
-    BOSCHCOM_ENDPOINT_RRC2_ZONES,
     BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS,
     BOSCHCOM_ENDPOINT_STANDARD,
     BOSCHCOM_ENDPOINT_SWITCH,
     BOSCHCOM_ENDPOINT_SWITCH_ENABLE,
     BOSCHCOM_ENDPOINT_SWITCH_PROGRAM,
+    BOSCHCOM_ENDPOINT_SYSTEM_BRAND,
     BOSCHCOM_ENDPOINT_SYSTEM_BUS,
+    BOSCHCOM_ENDPOINT_SYSTEM_HEALTH_STATUS,
     BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES,
     BOSCHCOM_ENDPOINT_SYSTEM_INFO,
     BOSCHCOM_ENDPOINT_TEMP,
@@ -187,7 +198,9 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING,
     BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_WIFI_STATE,
+    BOSCHCOM_ENDPOINT_ZONE_ICON,
     BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+    BOSCHCOM_ENDPOINT_ZONE_NAME,
     BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
     BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
     BOSCHCOM_ENDPOINT_ZONE_USER_MODE,
@@ -467,6 +480,94 @@ class HomeComAlt:
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_SYSTEM_INFO,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_health_status(self, device_id: str) -> Any:
+        """Get system health status (ok/error/maintenance)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_HEALTH_STATUS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_system_brand(self, device_id: str) -> Any:
+        """Get system brand identifier."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_BRAND,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_total_number_of_starts(self, device_id: str) -> Any:
+        """Get total heat-source number of starts (top-level, not hs1)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_TOTAL_NUMBER_OF_STARTS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_actual_power(self, device_id: str) -> Any:
+        """Get current heat-source power draw (hs1/actualPower)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_ACTUAL_POWER,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_power_percentage(self, device_id: str) -> Any:
+        """Get heat-source power percentage (hs1/powerPercentage)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_POWER_PERCENTAGE,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_operation_hours(self, device_id: str) -> Any:
+        """Get cumulative heat-source operating hours (hs1/operationHours)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_OPERATION_HOURS,
+        )
+        return await self._to_data(response)
+
+    async def async_get_hs_electricity_total_consumption(self, device_id: str) -> Any:
+        """Get total electricity consumed by heat sources (kWh)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_ELECTRICITY_TOTAL_CONSUMPTION,
+        )
+        return await self._to_data(response)
+
+    async def async_get_dhw_water_total_consumption(self, device_id: str) -> Any:
+        """Get total DHW water consumption (litres, top-level dhwCircuits)."""
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DWH_WATER_TOTAL_CONSUMPTION,
         )
         return await self._to_data(response)
 
@@ -1640,6 +1741,24 @@ class HomeComK40(HomeComAlt):
             + BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
         )
         return await self._to_data(response)
+
+    async def async_set_dhw_charge_setpoint(
+        self, device_id: str, dhw_id: str, temp: float
+    ) -> None:
+        """Set dhw singleChargeSetpoint (°C, typically 50..70)."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_CHARGE_SETPOINT,
+            {"value": temp},
+            1,
+        )
 
     async def async_get_ventilation_zones(self, device_id: str) -> Any:
         """Get ventilation zones."""
@@ -3371,8 +3490,12 @@ class HomeComIcom(HomeComK40):
             holiday_modes,
             system_info,
             system_bus,
+            health_status,
+            brand,
             hs_type,
             hs_info,
+            hs_return_temp,
+            hs_total_starts,
         ) = await asyncio.gather(
             limited_call(self.async_get_notifications(device_id)),
             limited_call(self.async_get_hc(device_id)),
@@ -3382,13 +3505,19 @@ class HomeComIcom(HomeComK40):
             limited_call(self.async_get_system_holiday_modes(device_id)),
             limited_call(self.async_get_system_info(device_id)),
             limited_call(self.async_get_system_bus(device_id)),
+            limited_call(self.async_get_system_health_status(device_id)),
+            limited_call(self.async_get_system_brand(device_id)),
             limited_call(self.async_get_hs_type(device_id)),
             limited_call(self.async_get_heat_sources_info(device_id)),
+            limited_call(self.async_get_hs_return_temp(device_id)),
+            limited_call(self.async_get_hs_total_number_of_starts(device_id)),
         )
 
         heat_sources = {
             "type": hs_type or {},
             "info": hs_info or {},
+            "returnTemperature": hs_return_temp or {},
+            "numberOfStarts": hs_total_starts or {},
         }
 
         # Heating circuits — fetch per-HC fields supported by icom.
@@ -3456,16 +3585,47 @@ class HomeComIcom(HomeComK40):
         else:
             heating_circuits["references"] = []
 
-        # DHW circuits — only listing + per-circuit holiday flag.
+        # DHW circuits — fetch the writable + readable surface confirmed
+        # working on icom heat pumps (issue #53 response dump).
         dhw_circuits = dhw_circuits or {}
         dhw_refs = dhw_circuits.get("references", [])
         if dhw_refs:
 
             async def populate_dhw(ref: dict[str, Any]) -> None:
                 dhw_id = ref["id"].split("/")[-1]
-                ref["holidayActivated"] = await limited_call(
-                    self.async_get_dhw_holiday_activated(device_id, dhw_id)
+                (
+                    ref["operationMode"],
+                    ref["actualTemp"],
+                    ref["currentTemperatureLevel"],
+                    ref["charge"],
+                    ref["chargeRemainingTime"],
+                    ref["chargeDuration"],
+                    ref["singleChargeSetpoint"],
+                    ref["holidayActivated"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_dhw_operation_mode(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_current_temp_level(device_id, dhw_id)
+                    ),
+                    limited_call(self.async_get_dhw_charge(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_charge_remaining_time(device_id, dhw_id)
+                    ),
+                    limited_call(self.async_get_dhw_charge_duration(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_charge_setpoint(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_holiday_activated(device_id, dhw_id)
+                    ),
                 )
+                # temperatureLevels is a refEnum with off/low/high subnodes.
+                # Fetch each level value so HA can show / edit them.
+                temp_levels: dict[str, Any] = {}
+                for level in ("off", "low", "high"):
+                    temp_levels[level] = await limited_call(
+                        self.async_get_dhw_temp_level(device_id, dhw_id, level)
+                    )
+                ref["temperatureLevels"] = temp_levels
 
             await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
         else:
@@ -3527,14 +3687,19 @@ class HomeComIcom(HomeComK40):
             ventilation=vent_refs,
             system_info=system_info or {},
             system_bus=system_bus or {},
+            health_status=health_status or {},
+            brand=brand or {},
         )
 
 
-class HomeComRrc2(HomeComAlt):
+class HomeComRrc2(HomeComK40):
     """HomeCom client for rrc2 (Remeha Remote Control) gateways.
 
-    Distinct URL scheme from K40 — uses /zones, /hc, /dhw paths and a much
-    smaller surface (no heatingCircuits, no system/info, no recordings).
+    The gateway serves K40-style /zones, /heatingCircuits, /dhwCircuits paths
+    but with a trimmed and slightly different field set (per issue #78 dumps).
+    Inherits K40 GET/SET methods that work on RRC2 (zone setpoint, HC curve,
+    away mode, child lock, heat sources) and adds DHW thermal-disinfect /
+    extra-DHW / hot-water-system and the RRC2-only gateway endpoints.
     """
 
     def __init__(
@@ -3545,21 +3710,9 @@ class HomeComRrc2(HomeComAlt):
         auth_provider: bool,
     ) -> None:
         """Initialize Rrc2 device."""
-        super().__init__(session, options, auth_provider)
+        HomeComAlt.__init__(self, session, options, auth_provider)
         self.device_id = device_id
         self.device_type = "rrc2"
-
-    async def async_get_rrc2_zones(self, device_id: str) -> Any:
-        """List rrc2 zones."""
-        await self.get_token()
-        response = await self._async_http_request(
-            "get",
-            BOSCHCOM_DOMAIN
-            + BOSCHCOM_ENDPOINT_GATEWAYS
-            + device_id
-            + BOSCHCOM_ENDPOINT_RRC2_ZONES,
-        )
-        return await self._to_data(response)
 
     async def _async_get_zone_field(
         self, device_id: str, zone_id: str, suffix: str
@@ -3570,67 +3723,64 @@ class HomeComRrc2(HomeComAlt):
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
-            + BOSCHCOM_ENDPOINT_RRC2_ZONES
+            + BOSCHCOM_ENDPOINT_ZONES
             + "/"
             + zone_id
             + suffix,
         )
         return await self._to_data(response)
 
-    async def async_get_zone_temp_actual(self, device_id: str, zone_id: str) -> Any:
-        """Actual zone temperature."""
-        return await self._async_get_zone_field(
-            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_ACTUAL
-        )
-
-    async def async_get_zone_temp_heating_setpoint(
-        self, device_id: str, zone_id: str
-    ) -> Any:
-        """Zone heating setpoint."""
-        return await self._async_get_zone_field(
-            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_TEMP_HEATING_SETPOINT
-        )
-
     async def async_get_zone_name(self, device_id: str, zone_id: str) -> Any:
         """Zone name."""
         return await self._async_get_zone_field(
-            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_NAME
+            device_id, zone_id, BOSCHCOM_ENDPOINT_ZONE_NAME
         )
 
     async def async_get_zone_icon(self, device_id: str, zone_id: str) -> Any:
         """Zone icon identifier."""
         return await self._async_get_zone_field(
-            device_id, zone_id, BOSCHCOM_ENDPOINT_RRC2_ZONE_ICON
+            device_id, zone_id, BOSCHCOM_ENDPOINT_ZONE_ICON
         )
 
-    async def _async_get_hc_field(self, device_id: str, hc_id: str, suffix: str) -> Any:
+    async def _async_get_hc_subresource(
+        self, device_id: str, hc_id: str, suffix: str
+    ) -> Any:
         await self.get_token()
         response = await self._async_http_request(
             "get",
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
-            + BOSCHCOM_ENDPOINT_RRC2_HC
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
             + "/"
             + hc_id
             + suffix,
         )
         return await self._to_data(response)
 
-    async def async_get_hc_actual_temp(self, device_id: str, hc_id: str) -> Any:
-        """Heating circuit actual temperature (rrc2 path)."""
-        return await self._async_get_hc_field(
-            device_id, hc_id, BOSCHCOM_ENDPOINT_RRC2_HC_ACTUAL_TEMP
+    async def async_get_hc_operating_season(self, device_id: str, hc_id: str) -> Any:
+        """Heating circuit current operating season."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_OPERATING_SEASON
         )
 
-    async def async_get_hc_control_key(self, device_id: str, hc_id: str) -> Any:
-        """Heating circuit control key."""
-        return await self._async_get_hc_field(
-            device_id, hc_id, BOSCHCOM_ENDPOINT_RRC2_HC_CONTROL_KEY
+    async def async_get_hc_type(self, device_id: str, hc_id: str) -> Any:
+        """Heating circuit type."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TYPE
         )
 
-    async def _async_get_dhw_field(
-        self, device_id: str, dhw_id: str, suffix: str
+    async def async_get_hc_type_room_control(self, device_id: str, hc_id: str) -> Any:
+        """Heating circuit room control type."""
+        return await self._async_get_hc_subresource(
+            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TYPE_ROOM_CONTROL
+        )
+
+    async def _async_dhw_field(
+        self,
+        device_id: str,
+        dhw_id: str,
+        suffix: str,
     ) -> Any:
         await self.get_token()
         response = await self._async_http_request(
@@ -3638,24 +3788,160 @@ class HomeComRrc2(HomeComAlt):
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
-            + BOSCHCOM_ENDPOINT_RRC2_DHW
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
             + "/"
             + dhw_id
             + suffix,
         )
         return await self._to_data(response)
 
-    async def async_get_dhw_actual_temp(self, device_id: str, dhw_id: str) -> Any:
-        """DHW actual temperature (rrc2 path)."""
-        return await self._async_get_dhw_field(
-            device_id, dhw_id, BOSCHCOM_ENDPOINT_RRC2_DHW_ACTUAL_TEMP
+    async def _async_set_dhw_field(
+        self,
+        device_id: str,
+        dhw_id: str,
+        suffix: str,
+        value: Any,
+    ) -> None:
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + suffix,
+            {"value": value},
+            1,
         )
 
     async def async_get_dhw_hot_water_system(self, device_id: str, dhw_id: str) -> Any:
-        """DHW hot water system info."""
-        return await self._async_get_dhw_field(
-            device_id, dhw_id, BOSCHCOM_ENDPOINT_RRC2_DHW_HOT_WATER_SYSTEM
+        """DHW hot water system kind (e.g. instant, tank)."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_HOT_WATER_SYSTEM
         )
+
+    async def async_get_dhw_state(self, device_id: str, dhw_id: str) -> Any:
+        """DHW state."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_STATE
+        )
+
+    async def async_get_dhw_extra_dhw(self, device_id: str, dhw_id: str) -> Any:
+        """DHW extra-DHW boost flag."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW
+        )
+
+    async def async_set_dhw_extra_dhw(
+        self, device_id: str, dhw_id: str, value: str
+    ) -> None:
+        """Toggle DHW extra-DHW boost."""
+        await self._async_set_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW, value
+        )
+
+    async def async_get_dhw_extra_dhw_duration(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """DHW extra-DHW duration (minutes)."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW_DURATION
+        )
+
+    async def async_set_dhw_extra_dhw_duration(
+        self, device_id: str, dhw_id: str, minutes: int
+    ) -> None:
+        """Set DHW extra-DHW duration (minutes, 15..2880 step 15)."""
+        await self._async_set_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_EXTRA_DHW_DURATION, minutes
+        )
+
+    async def async_get_dhw_temp_level_high(self, device_id: str, dhw_id: str) -> Any:
+        """DHW high temperature level (°C)."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_HIGH
+        )
+
+    async def async_set_dhw_temp_level_high(
+        self, device_id: str, dhw_id: str, temp: float
+    ) -> None:
+        """Set DHW high temperature level (°C, 10..80)."""
+        await self._async_set_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_HIGH, temp
+        )
+
+    async def async_get_dhw_thermal_disinfect_state(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """DHW thermal-disinfect program state."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_STATE
+        )
+
+    async def async_set_dhw_thermal_disinfect_state(
+        self, device_id: str, dhw_id: str, value: str
+    ) -> None:
+        """Enable/disable DHW thermal disinfect."""
+        await self._async_set_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_STATE, value
+        )
+
+    async def async_get_dhw_thermal_disinfect_time(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """DHW thermal disinfect minute-of-day."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_TIME
+        )
+
+    async def async_set_dhw_thermal_disinfect_time(
+        self, device_id: str, dhw_id: str, minutes: int
+    ) -> None:
+        """Set DHW thermal disinfect minute-of-day (0..1439)."""
+        await self._async_set_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_TIME, minutes
+        )
+
+    async def async_get_dhw_thermal_disinfect_weekday(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """DHW thermal disinfect day of week."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_WEEKDAY
+        )
+
+    async def async_set_dhw_thermal_disinfect_weekday(
+        self, device_id: str, dhw_id: str, weekday: str
+    ) -> None:
+        """Set DHW thermal disinfect day of week (Mo|Tu|We|Th|Fr|Sa|Su)."""
+        await self._async_set_dhw_field(
+            device_id,
+            dhw_id,
+            BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_WEEKDAY,
+            weekday,
+        )
+
+    async def async_get_dhw_thermal_disinfect_last_result(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """DHW thermal disinfect last result."""
+        return await self._async_dhw_field(
+            device_id, dhw_id, BOSCHCOM_ENDPOINT_DWH_THERMAL_DISINFECT_LAST_RESULT
+        )
+
+    async def async_get_heat_sources_info(self, device_id: str) -> Any:
+        """Get the /heatSources/info payload."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_INFO,
+        )
+        return await self._to_data(response)
 
     async def async_get_gateway_uuid(self, device_id: str) -> Any:
         """Gateway UUID."""
@@ -3693,6 +3979,18 @@ class HomeComRrc2(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_gateway_wifi_rssi(self, device_id: str) -> Any:
+        """Gateway WiFi RSSI (dBm)."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_RRC2_GATEWAY_WIFI_RSSI,
+        )
+        return await self._to_data(response)
+
     async def async_get_system_location(self, device_id: str) -> Any:
         """System location coordinates."""
         await self.get_token()
@@ -3705,8 +4003,10 @@ class HomeComRrc2(HomeComAlt):
         )
         return await self._to_data(response)
 
-    async def async_update(self, device_id: str) -> BHCDeviceRrc2:
-        """Fetch the rrc2-supported endpoint subset and return a BHCDeviceRrc2."""
+    async def async_update(  # type: ignore[override]
+        self, device_id: str
+    ) -> BHCDeviceRrc2:
+        """Fetch the rrc2-supported endpoint set and return a BHCDeviceRrc2."""
         await self.get_token()
 
         sem = asyncio.Semaphore(MAX_CONCURRENT)
@@ -3720,37 +4020,66 @@ class HomeComRrc2(HomeComAlt):
         (
             notifications,
             zones,
+            heating_circuits,
+            dhw_circuits,
+            devices,
+            away_mode,
+            outdoor_temp,
+            indoor_humidity,
+            hs_type,
+            hs_info,
+            hs_flame,
+            hs_supply,
+            hs_return,
+            hs_modulation,
+            hs_working_time,
+            hs_starts,
             gw_uuid,
             gw_time,
             gw_timezone,
+            gw_rssi,
             system_location,
         ) = await asyncio.gather(
             limited_call(self.async_get_notifications(device_id)),
-            limited_call(self.async_get_rrc2_zones(device_id)),
+            limited_call(self.async_get_zones(device_id)),
+            limited_call(self.async_get_hc(device_id)),
+            limited_call(self.async_get_dhw(device_id)),
+            limited_call(self.async_get_devices_list(device_id)),
+            limited_call(self.async_get_away_mode(device_id)),
+            limited_call(self.async_get_outdoor_temp(device_id)),
+            limited_call(self.async_get_indoor_humidity(device_id)),
+            limited_call(self.async_get_hs_type(device_id)),
+            limited_call(self.async_get_heat_sources_info(device_id)),
+            limited_call(self.async_get_hs_flame_indication(device_id)),
+            limited_call(self.async_get_hs_supply_temp(device_id)),
+            limited_call(self.async_get_hs_return_temp(device_id)),
+            limited_call(self.async_get_hs_modulation(device_id)),
+            limited_call(self.async_get_hs_working_time(device_id)),
+            limited_call(self.async_get_hs_starts(device_id)),
             limited_call(self.async_get_gateway_uuid(device_id)),
             limited_call(self.async_get_gateway_time(device_id)),
             limited_call(self.async_get_gateway_timezone(device_id)),
+            limited_call(self.async_get_gateway_wifi_rssi(device_id)),
             limited_call(self.async_get_system_location(device_id)),
         )
 
         zones = zones or {}
         zone_refs = zones.get("references", [])
-        hc_refs: list[dict[str, Any]] = []
-        dhw_refs: list[dict[str, Any]] = []
-
         if zone_refs:
 
             async def populate_zone(ref: dict[str, Any]) -> None:
                 zone_id = ref["id"].split("/")[-1]
                 (
-                    ref["zoneTemperatureActual"],
-                    ref["zoneTemperatureHeatingSetpoint"],
+                    ref["temperatureActual"],
+                    ref["temperatureHeatingSetpoint"],
+                    ref["manualTemperatureHeating"],
                     ref["name"],
                     ref["icon"],
                 ) = await asyncio.gather(
                     limited_call(self.async_get_zone_temp_actual(device_id, zone_id)),
+                    limited_call(self.async_get_zone_temp_setpoint(device_id, zone_id)),
                     limited_call(
-                        self.async_get_zone_temp_heating_setpoint(device_id, zone_id)
+                        self.async_get_zone_manual_temp_heating(device_id, zone_id)
                     ),
                     limited_call(self.async_get_zone_name(device_id, zone_id)),
                     limited_call(self.async_get_zone_icon(device_id, zone_id)),
@@ -3758,44 +4087,124 @@ class HomeComRrc2(HomeComAlt):
 
             await asyncio.gather(*(populate_zone(ref) for ref in zone_refs))
 
-            # rrc2 returns hc{N} and dhw{N} ids implicit per zone — derive a
-            # synthetic listing by scanning zone metadata. Real installs may
-            # have only one of each; we surface them as separate refs so HA
-            # can wire HC/DHW entities.
-            hc_refs = [{"id": f"/hc/hc{i}"} for i in range(1, len(zone_refs) + 1)][:1]
-            dhw_refs = [{"id": "/dhw/dhw1"}]
+        heating_circuits = heating_circuits or {}
+        hc_refs = heating_circuits.get("references", [])
+        if hc_refs:
 
             async def populate_hc(ref: dict[str, Any]) -> None:
                 hc_id = ref["id"].split("/")[-1]
                 (
-                    ref["actualTemperature"],
-                    ref["controlKey"],
+                    ref["supplyTemperatureSetpoint"],
+                    ref["operatingSeason"],
+                    ref["type"],
+                    ref["typeRoomControl"],
+                    ref["maxSupply"],
+                    ref["minSupply"],
+                    ref["heatCurveMax"],
+                    ref["heatCurveMin"],
+                    ref["nightSwitchMode"],
+                    ref["nightThreshold"],
+                    ref["roomInfluence"],
+                    ref["control"],
                 ) = await asyncio.gather(
-                    limited_call(self.async_get_hc_actual_temp(device_id, hc_id)),
-                    limited_call(self.async_get_hc_control_key(device_id, hc_id)),
+                    limited_call(
+                        self.async_get_hc_supply_temp_setpoint(device_id, hc_id)
+                    ),
+                    limited_call(self.async_get_hc_operating_season(device_id, hc_id)),
+                    limited_call(self.async_get_hc_type(device_id, hc_id)),
+                    limited_call(self.async_get_hc_type_room_control(device_id, hc_id)),
+                    limited_call(self.async_get_hc_max_supply(device_id, hc_id)),
+                    limited_call(self.async_get_hc_min_supply(device_id, hc_id)),
+                    limited_call(self.async_get_hc_heat_curve_max(device_id, hc_id)),
+                    limited_call(self.async_get_hc_heat_curve_min(device_id, hc_id)),
+                    limited_call(self.async_get_hc_night_switch_mode(device_id, hc_id)),
+                    limited_call(self.async_get_hc_night_threshold(device_id, hc_id)),
+                    limited_call(self.async_get_hc_room_influence(device_id, hc_id)),
+                    limited_call(self.async_get_hc_control(device_id, hc_id)),
                 )
+
+            await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
+
+        dhw_circuits = dhw_circuits or {}
+        dhw_refs = dhw_circuits.get("references", [])
+        if dhw_refs:
 
             async def populate_dhw(ref: dict[str, Any]) -> None:
                 dhw_id = ref["id"].split("/")[-1]
                 (
-                    ref["actualTemperature"],
+                    ref["actualTemp"],
+                    ref["state"],
                     ref["hotWaterSystem"],
+                    ref["operationMode"],
+                    ref["extraDhw"],
+                    ref["extraDhwDuration"],
+                    ref["temperatureLevelHigh"],
+                    ref["thermalDisinfectState"],
+                    ref["thermalDisinfectTime"],
+                    ref["thermalDisinfectWeekDay"],
+                    ref["thermalDisinfectLastResult"],
                 ) = await asyncio.gather(
                     limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_state(device_id, dhw_id)),
                     limited_call(
                         self.async_get_dhw_hot_water_system(device_id, dhw_id)
                     ),
+                    limited_call(self.async_get_dhw_operation_mode(device_id, dhw_id)),
+                    limited_call(self.async_get_dhw_extra_dhw(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_extra_dhw_duration(device_id, dhw_id)
+                    ),
+                    limited_call(self.async_get_dhw_temp_level_high(device_id, dhw_id)),
+                    limited_call(
+                        self.async_get_dhw_thermal_disinfect_state(device_id, dhw_id)
+                    ),
+                    limited_call(
+                        self.async_get_dhw_thermal_disinfect_time(device_id, dhw_id)
+                    ),
+                    limited_call(
+                        self.async_get_dhw_thermal_disinfect_weekday(device_id, dhw_id)
+                    ),
+                    limited_call(
+                        self.async_get_dhw_thermal_disinfect_last_result(
+                            device_id, dhw_id
+                        )
+                    ),
                 )
 
-            await asyncio.gather(
-                *(populate_hc(ref) for ref in hc_refs),
-                *(populate_dhw(ref) for ref in dhw_refs),
-            )
+            await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
+
+        devices = devices or {}
+        device_refs = devices.get("references", [])
+        if device_refs:
+
+            async def populate_device(ref: dict[str, Any]) -> None:
+                dev_id = ref["id"].split("/")[-1]
+                (
+                    ref["type"],
+                    ref["childLockEnabled"],
+                ) = await asyncio.gather(
+                    limited_call(self.async_get_device_type(device_id, dev_id)),
+                    limited_call(self.async_get_child_lock(device_id, dev_id)),
+                )
+
+            await asyncio.gather(*(populate_device(ref) for ref in device_refs))
+
+        heat_sources = {
+            "type": hs_type or {},
+            "info": hs_info or {},
+            "flameIndication": hs_flame or {},
+            "supplyTemperature": hs_supply or {},
+            "returnTemperature": hs_return or {},
+            "modulation": hs_modulation or {},
+            "workingTime": hs_working_time or {},
+            "numberOfStarts": hs_starts or {},
+        }
 
         gateway_info = {
             "uuid": gw_uuid or {},
             "time": gw_time or {},
             "timezone": gw_timezone or {},
+            "wifiRssi": gw_rssi or {},
         }
 
         return BHCDeviceRrc2(
@@ -3805,6 +4214,11 @@ class HomeComRrc2(HomeComAlt):
             zones=zone_refs,
             heating_circuits=hc_refs,
             dhw_circuits=dhw_refs,
+            heat_sources=heat_sources,
+            away_mode=away_mode or {},
+            outdoor_temp=outdoor_temp or {},
+            indoor_humidity=indoor_humidity or {},
+            devices=device_refs,
             gateway_info=gateway_info,
             system_location=system_location or {},
         )
@@ -4012,6 +4426,14 @@ class HomeComWddw2(HomeComAlt):
 
         notifications = await self.async_get_notifications(device_id)
         dhw_circuits = await self.async_get_dhw(device_id)
+        # Top-level totals and heat-source telemetry (issue #129).
+        water_total = await self.async_get_dhw_water_total_consumption(device_id)
+        hs_actual_power = await self.async_get_hs_actual_power(device_id)
+        hs_power_percentage = await self.async_get_hs_power_percentage(device_id)
+        hs_operation_hours = await self.async_get_hs_operation_hours(device_id)
+        hs_electricity_total = await self.async_get_hs_electricity_total_consumption(
+            device_id
+        )
         dhw_circuits = dhw_circuits or {}
         references = dhw_circuits.get("references", [])
         if references:
@@ -4054,6 +4476,13 @@ class HomeComWddw2(HomeComAlt):
             firmware=[],
             notifications=((notifications or {}).get("values") or []),
             dhw_circuits=dhw_circuits.get("references", {}),
+            heat_sources={
+                "actualPower": hs_actual_power or {},
+                "powerPercentage": hs_power_percentage or {},
+                "operationHours": hs_operation_hours or {},
+                "electricityTotalConsumption": hs_electricity_total or {},
+            },
+            water_total_consumption=water_total or {},
         )
 
 

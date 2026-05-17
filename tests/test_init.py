@@ -3074,7 +3074,23 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
     # must come AFTER per-circuit subpaths (e.g. ".../operationMode").
     icom_routes: list[tuple[str, dict[str, object]]] = [
         ("/heatSources/info", {"value": "ok"}),
+        ("/heatSources/returnTemperature", {"value": 43.1, "unitOfMeasure": "C"}),
+        ("/heatSources/numberOfStarts", {"value": 12668}),
         ("hs1/type", {"value": "heatpump"}),
+        ("/system/healthStatus", {"value": "ok"}),
+        ("/system/brand", {"value": "unknown"}),
+        # Order matters — longer paths must precede their prefixes (e.g.
+        # chargeDuration before charge).
+        ("/dhwCircuits/dhw1/temperatureLevels/off", {"value": 10}),
+        ("/dhwCircuits/dhw1/temperatureLevels/low", {"value": 40}),
+        ("/dhwCircuits/dhw1/temperatureLevels/high", {"value": 60}),
+        ("/dhwCircuits/dhw1/singleChargeSetpoint", {"value": 58}),
+        ("/dhwCircuits/dhw1/chargeRemainingTime", {"value": 0}),
+        ("/dhwCircuits/dhw1/chargeDuration", {"value": 120}),
+        ("/dhwCircuits/dhw1/charge", {"value": "stop"}),
+        ("/dhwCircuits/dhw1/currentTemperatureLevel", {"value": "high"}),
+        ("/dhwCircuits/dhw1/operationMode", {"value": "high"}),
+        ("/dhwCircuits/dhw1/actualTemp", {"value": 51.3, "unitOfMeasure": "C"}),
         ("/system/holidayModes/hm1/dhwMode", {"value": "off"}),
         ("/system/holidayModes/hm1/hcMode", {"value": "off"}),
         ("/system/holidayModes/hm1/fixTemperature", {"value": 18}),
@@ -3136,9 +3152,22 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
     assert result.holiday_mode[0]["fixTemperature"] == {"value": 18}
     assert result.system_info == {"value": "info"}
     assert result.system_bus == {"value": "EMS"}
-    assert result.heat_sources == {
-        "type": {"value": "heatpump"},
-        "info": {"value": "ok"},
+    assert result.health_status == {"value": "ok"}
+    assert result.brand == {"value": "unknown"}
+    assert result.heat_sources["type"] == {"value": "heatpump"}
+    assert result.heat_sources["info"] == {"value": "ok"}
+    assert result.heat_sources["returnTemperature"]["value"] == 43.1
+    assert result.heat_sources["numberOfStarts"] == {"value": 12668}
+    dhw = result.dhw_circuits[0]
+    assert dhw["operationMode"] == {"value": "high"}
+    assert dhw["actualTemp"]["value"] == 51.3
+    assert dhw["charge"] == {"value": "stop"}
+    assert dhw["chargeDuration"] == {"value": 120}
+    assert dhw["singleChargeSetpoint"] == {"value": 58}
+    assert dhw["temperatureLevels"] == {
+        "off": {"value": 10},
+        "low": {"value": 40},
+        "high": {"value": 60},
     }
 
     await session.close()
@@ -3160,40 +3189,37 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
     rrc2 = _make_rrc2(session)
 
     rrc2_substring_values: dict[str, object] = {
-        "/zones": {"references": [{"id": "/zones/zone1"}]},
-        "zoneTemperatureActual": {"value": 20.0},
-        "zoneTemperatureHeatingSetpoint": {"value": 21.0},
-        "/hc/hc1/actualTemperature": {"value": 19.5},
-        "/hc/hc1/controlKey": {"value": "1234"},
-        "/dhw/dhw1/actualTemperature": {"value": 50.0},
-        "/dhw/dhw1/hotWaterSystem": {"value": "boiler"},
-        "/gateway/uuid": {"value": "abc-123"},
-        "/gateway/time/current": {"value": "2026-05-10T10:00:00Z"},
-        "/gateway/time/timeZone": {"value": "Europe/Berlin"},
-        "/system/location/coordinates": {"value": {"lat": 50, "lon": 7}},
+        "/resource/zones": {"references": [{"id": "/zones/zone1"}]},
+        "/resource/heatingCircuits": {"references": [{"id": "/heatingCircuits/hc1"}]},
+        "/resource/dhwCircuits": {"references": [{"id": "/dhwCircuits/dhw1"}]},
+        "/zones/zone1/temperatureActual": {"value": 20.0},
+        "/zones/zone1/temperatureHeatingSetpoint": {"value": 21.0},
+        "/zones/zone1/manualTemperatureHeating": {"value": 21.5},
+        "/zones/zone1/name": {"value": "Living"},
+        "/zones/zone1/icon": {"value": "icon1"},
+        "/heatingCircuits/hc1/supplyTemperatureSetpoint": {"value": 45.0},
+        "/heatingCircuits/hc1/heatCurveMax": {"value": 75},
+        "/heatingCircuits/hc1/heatCurveMin": {"value": 25},
+        "/heatingCircuits/hc1/control": {"value": "weather"},
+        "/dhwCircuits/dhw1/actualTemp": {"value": 50.0},
+        "/dhwCircuits/dhw1/hotWaterSystem": {"value": "instant"},
+        "/dhwCircuits/dhw1/operationMode": {"value": "Off"},
+        "/resource/gateway/uuid": {"value": "abc-123"},
+        "/resource/gateway/time/current": {"value": "2026-05-10T10:00:00Z"},
+        "/resource/gateway/time/timeZone": {"value": "Europe/Berlin"},
+        "/resource/gateway/wifi/rssi": {"value": -44},
+        "/resource/system/location/coordinates": {"value": {"lat": 50, "lon": 7}},
+        "/resource/system/awayMode/enabled": {"value": "false"},
     }
+
+    needles = sorted(rrc2_substring_values.keys(), key=len, reverse=True)
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
         if "notifications" in url:
             return _mock_json_response({"values": []})
-        # Order matters — match the most-specific paths first.
-        for needle in (
-            "/hc/hc1/actualTemperature",
-            "/hc/hc1/controlKey",
-            "/dhw/dhw1/actualTemperature",
-            "/dhw/dhw1/hotWaterSystem",
-            "/gateway/uuid",
-            "/gateway/time/current",
-            "/gateway/time/timeZone",
-            "/system/location/coordinates",
-            "zoneTemperatureActual",
-            "zoneTemperatureHeatingSetpoint",
-            "/zones/zone1/name",
-            "/zones/zone1/icon",
-            "/zones",
-        ):
+        for needle in needles:
             if needle in url:
-                return _mock_json_response(rrc2_substring_values.get(needle, {}))
+                return _mock_json_response(rrc2_substring_values[needle])
         if url.endswith("/resource/gateway/versionFirmware"):
             return _mock_json_response({"value": "1.0"})
         return _mock_json_response({})
@@ -3203,17 +3229,47 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
 
     assert result.device == DEVICE_ID
     assert len(result.zones) == 1
-    assert result.zones[0]["zoneTemperatureActual"] == {"value": 20.0}
-    assert result.zones[0]["zoneTemperatureHeatingSetpoint"] == {"value": 21.0}
-    assert result.heating_circuits[0]["actualTemperature"] == {"value": 19.5}
-    assert result.heating_circuits[0]["controlKey"] == {"value": "1234"}
-    assert result.dhw_circuits[0]["actualTemperature"] == {"value": 50.0}
-    assert result.dhw_circuits[0]["hotWaterSystem"] == {"value": "boiler"}
+    assert result.zones[0]["temperatureActual"] == {"value": 20.0}
+    assert result.zones[0]["temperatureHeatingSetpoint"] == {"value": 21.0}
+    assert result.zones[0]["manualTemperatureHeating"] == {"value": 21.5}
+    assert result.zones[0]["name"] == {"value": "Living"}
+    assert result.heating_circuits[0]["heatCurveMax"] == {"value": 75}
+    assert result.heating_circuits[0]["control"] == {"value": "weather"}
+    assert result.dhw_circuits[0]["actualTemp"] == {"value": 50.0}
+    assert result.dhw_circuits[0]["hotWaterSystem"] == {"value": "instant"}
+    assert result.dhw_circuits[0]["operationMode"] == {"value": "Off"}
+    assert result.away_mode == {"value": "false"}
     assert result.gateway_info == {
         "uuid": {"value": "abc-123"},
         "time": {"value": "2026-05-10T10:00:00Z"},
         "timezone": {"value": "Europe/Berlin"},
+        "wifiRssi": {"value": -44},
     }
     assert result.system_location == {"value": {"lat": 50, "lon": 7}}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rrc2_async_set_zone_manual_temp_heating() -> None:
+    """Setpoint PUT issues correct URL and body."""
+    session = ClientSession()
+    rrc2 = _make_rrc2(session)
+
+    captured: dict[str, object] = {}
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        captured["method"] = method
+        captured["url"] = url
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _mock_json_response({})
+
+    with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        await rrc2.async_set_zone_manual_temp_heating(DEVICE_ID, "zone1", 21.5)
+
+    assert captured["method"] == "put"
+    assert "/resource/zones/zone1/manualTemperatureHeating" in captured["url"]  # type: ignore[operator]
+    assert captured["args"][0] == {"value": 21.5}
 
     await session.close()
