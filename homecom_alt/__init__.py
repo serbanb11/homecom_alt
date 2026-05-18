@@ -237,6 +237,7 @@ from .model import (
 _LOGGER = logging.getLogger(__name__)
 
 _NOT_FOUND_CACHE_TTL: float = 86400.0  # 24 hours
+_TRANSIENT_ERROR_CACHE_TTL: float = 300.0  # 5 minutes — for 429/502/504
 
 
 class HomeComAlt:
@@ -257,6 +258,7 @@ class HomeComAlt:
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
         self._lock = asyncio.Lock()
         self._not_found_cache: dict[str, float] = {}
+        self._transient_error_cache: dict[str, float] = {}
 
     @property
     def refresh_token(self) -> str | None:
@@ -374,6 +376,17 @@ class HomeComAlt:
                 return {}
             del self._not_found_cache[url]
 
+        if method.upper() == "GET" and url in self._transient_error_cache:
+            if (
+                time.monotonic() - self._transient_error_cache[url]
+                < _TRANSIENT_ERROR_CACHE_TTL
+            ):
+                _LOGGER.debug(
+                    "Skipping endpoint %s (cached transient error)", url
+                )
+                return {}
+            del self._transient_error_cache[url]
+
         headers = {
             "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
         }
@@ -416,9 +429,19 @@ class HomeComAlt:
                 HTTPStatus.GATEWAY_TIMEOUT.value,  # 504
             ):
                 _LOGGER.warning("Endpoint %s returned %s", url, error.status)
+                if method.upper() == "GET":
+                    self._transient_error_cache[url] = time.monotonic()
                 return {}
             if error.status == HTTPStatus.TOO_MANY_REQUESTS.value:
-                _LOGGER.warning("Endpoint %s returned %s", url, error.status)
+                _LOGGER.warning(
+                    "Endpoint %s returned %s — caching for %ss",
+                    url,
+                    error.status,
+                    _TRANSIENT_ERROR_CACHE_TTL,
+                )
+                if method.upper() == "GET":
+                    self._transient_error_cache[url] = time.monotonic()
+                    return {}
                 raise NotRespondingError(f"{url} is rate limited") from error
             raise ApiError(
                 f"Invalid response from url {url}: {error.status}"
