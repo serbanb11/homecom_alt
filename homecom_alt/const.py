@@ -295,6 +295,7 @@ BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_MODE: Final[str] = "/switchProgramMode"
 BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT: Final[str] = "/temporaryRoomSetpoint"
 BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE: Final[str] = "/suWiSwitchMode"
 BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED: Final[str] = "/holidayMode/activated"
+BOSCHCOM_ENDPOINT_DHW_CURRENT_SETPOINT: Final[str] = "/currentSetpoint"
 
 BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID: Final[str] = "/resource/gateway/uuid"
 BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME: Final[str] = "/resource/gateway/time/current"

@@ -61,6 +61,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_DEVICE_ZONE_ID,
     BOSCHCOM_ENDPOINT_DEVICES,
     BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+    BOSCHCOM_ENDPOINT_DHW_CURRENT_SETPOINT,
     BOSCHCOM_ENDPOINT_DHW_HOLIDAY_ACTIVATED,
     BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP,
     BOSCHCOM_ENDPOINT_DWH_AIRBOX,
@@ -404,7 +405,7 @@ class HomeComAlt:
             ):
                 return None
             if error.status == HTTPStatus.NOT_FOUND.value:
-                _LOGGER.warning("Endpoint %s returned %s", url, error.status)
+                _LOGGER.debug("Endpoint %s returned %s", url, error.status)
                 if method.upper() == "GET":
                     self._not_found_cache[url] = time.monotonic()
                 return {}
@@ -1206,6 +1207,24 @@ class HomeComK40(HomeComAlt):
             + "/"
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+            {"value": temp},
+            1,
+        )
+
+    async def async_set_hc_temporary_room_setpoint(
+        self, device_id: str, hc_id: str, temp: float
+    ) -> None:
+        """Set a temporary room-temperature override for a heating circuit."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT,
             {"value": temp},
             1,
         )
@@ -3462,6 +3481,21 @@ class HomeComIcom(HomeComK40):
         )
         return await self._to_data(response)
 
+    async def async_get_dhw_current_setpoint(self, device_id: str, dhw_id: str) -> Any:
+        """Get the live DHW current setpoint for a circuit."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DHW_CURRENT_SETPOINT,
+        )
+        return await self._to_data(response)
+
     async def async_update(  # type: ignore[override]
         self, device_id: str
     ) -> BHCDeviceIcom:
@@ -3496,6 +3530,13 @@ class HomeComIcom(HomeComK40):
             hs_info,
             hs_return_temp,
             hs_total_starts,
+            hs_supply_temp,
+            hs_modulation,
+            hs_total_consumption,
+            hs_working_time,
+            hs_system_pressure,
+            hs_heat_demand,
+            outdoor_temp,
         ) = await asyncio.gather(
             limited_call(self.async_get_notifications(device_id)),
             limited_call(self.async_get_hc(device_id)),
@@ -3511,6 +3552,13 @@ class HomeComIcom(HomeComK40):
             limited_call(self.async_get_heat_sources_info(device_id)),
             limited_call(self.async_get_hs_return_temp(device_id)),
             limited_call(self.async_get_hs_total_number_of_starts(device_id)),
+            limited_call(self.async_get_hs_supply_temp(device_id)),
+            limited_call(self.async_get_hs_modulation(device_id)),
+            limited_call(self.async_get_hs_total_consumption(device_id)),
+            limited_call(self.async_get_hs_working_time(device_id)),
+            limited_call(self.async_get_hs_system_pressure(device_id)),
+            limited_call(self.async_get_hs_heat_demand(device_id)),
+            limited_call(self.async_get_outdoor_temp(device_id)),
         )
 
         heat_sources = {
@@ -3518,6 +3566,13 @@ class HomeComIcom(HomeComK40):
             "info": hs_info or {},
             "returnTemperature": hs_return_temp or {},
             "numberOfStarts": hs_total_starts or {},
+            "supplyTemperature": hs_supply_temp or {},
+            "modulation": hs_modulation or {},
+            "totalConsumption": hs_total_consumption or {},
+            "workingTime": hs_working_time or {},
+            "systemPressure": hs_system_pressure or {},
+            "actualHeatDemand": hs_heat_demand or {},
+            "outdoorTemp": outdoor_temp or {},
         }
 
         # Heating circuits — fetch per-HC fields supported by icom.
@@ -3602,6 +3657,7 @@ class HomeComIcom(HomeComK40):
                     ref["chargeDuration"],
                     ref["singleChargeSetpoint"],
                     ref["holidayActivated"],
+                    ref["currentSetpoint"],
                 ) = await asyncio.gather(
                     limited_call(self.async_get_dhw_operation_mode(device_id, dhw_id)),
                     limited_call(self.async_get_dhw_actual_temp(device_id, dhw_id)),
@@ -3616,6 +3672,9 @@ class HomeComIcom(HomeComK40):
                     limited_call(self.async_get_dhw_charge_setpoint(device_id, dhw_id)),
                     limited_call(
                         self.async_get_dhw_holiday_activated(device_id, dhw_id)
+                    ),
+                    limited_call(
+                        self.async_get_dhw_current_setpoint(device_id, dhw_id)
                     ),
                 )
                 # temperatureLevels is a refEnum with off/low/high subnodes.
@@ -4073,6 +4132,7 @@ class HomeComRrc2(HomeComK40):
                     ref["temperatureActual"],
                     ref["temperatureHeatingSetpoint"],
                     ref["manualTemperatureHeating"],
+                    ref["userMode"],
                     ref["name"],
                     ref["icon"],
                 ) = await asyncio.gather(
@@ -4081,6 +4141,7 @@ class HomeComRrc2(HomeComK40):
                     limited_call(
                         self.async_get_zone_manual_temp_heating(device_id, zone_id)
                     ),
+                    limited_call(self.async_get_zone_user_mode(device_id, zone_id)),
                     limited_call(self.async_get_zone_name(device_id, zone_id)),
                     limited_call(self.async_get_zone_icon(device_id, zone_id)),
                 )
@@ -4182,9 +4243,21 @@ class HomeComRrc2(HomeComK40):
                 (
                     ref["type"],
                     ref["childLockEnabled"],
+                    ref["roomtemperature"],
+                    ref["actualHumidity"],
+                    ref["signal"],
+                    ref["battery"],
+                    ref["currentRoomSetpoint"],
                 ) = await asyncio.gather(
                     limited_call(self.async_get_device_type(device_id, dev_id)),
                     limited_call(self.async_get_child_lock(device_id, dev_id)),
+                    limited_call(self.async_get_device_room_temp(device_id, dev_id)),
+                    limited_call(self.async_get_device_humidity(device_id, dev_id)),
+                    limited_call(self.async_get_device_signal(device_id, dev_id)),
+                    limited_call(self.async_get_device_battery(device_id, dev_id)),
+                    limited_call(
+                        self.async_get_device_current_room_setpoint(device_id, dev_id)
+                    ),
                 )
 
             await asyncio.gather(*(populate_device(ref) for ref in device_refs))
