@@ -1991,6 +1991,12 @@ class HomeComK40(HomeComAlt):
         outdoor_temp = bulk_response.get(BOSCHCOM_ENDPOINT_OUTDOOR_TEMP)
         ventilation = bulk_response.get(BOSCHCOM_ENDPOINT_VENTILATION)
         zones = bulk_response.get(BOSCHCOM_ENDPOINT_ZONES)
+        if zones and "references" in zones:
+            zones["references"] = [
+                ref
+                for ref in zones["references"]
+                if ref.get("id") not in ("/zones/deviceTypeAllowed", "/zones/list")
+            ]
         flame_indication = bulk_response.get(BOSCHCOM_ENDPOINT_HS_FLAME)
         indoor_humidity = bulk_response.get(BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY)
         devices = bulk_response.get(BOSCHCOM_ENDPOINT_DEVICES)

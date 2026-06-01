@@ -1964,6 +1964,48 @@ async def test_k40_devices_and_child_lock() -> None:
 
 
 @pytest.mark.asyncio
+async def test_k40_async_update_filters_zone_metadata_refs() -> None:
+    """K40 update excludes /zones/deviceTypeAllowed and /zones/list from zones."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            return _k40_bulk_route(
+                url,
+                args,
+                kwargs,
+                overrides={
+                    "/zones": {
+                        "references": [
+                            {"id": "/zones/deviceTypeAllowed"},
+                            {"id": "/zones/list"},
+                            {"id": "/zones/zn1"},
+                        ]
+                    },
+                },
+            )
+        if "zones" in url and "temperatureActual" in url:
+            return _mock_json_response({"value": 22.0})
+        if "zones" in url and "manualTemperatureHeating" in url:
+            return _mock_json_response({"value": 20})
+        if "zones" in url and "userMode" in url:
+            return _mock_json_response({"value": "auto"})
+        if "zones" in url and "temperatureHeatingSetpoint" in url:
+            return _mock_json_response({"value": 21})
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert isinstance(result.zones, list)
+    assert len(result.zones) == 1
+    assert result.zones[0]["id"] == "/zones/zn1"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_k40_async_update_with_zones_and_devices() -> None:
     """K40 update with zones and devices populated."""
     session = ClientSession()
