@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -21,14 +21,25 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: |
-          pip install uv tox tox-gh-actions tox-uv
+        run: uv sync --group dev --python ${{ matrix.python-version }}
 
-      - name: Test with tox
-        run: tox
+      - name: Lint
+        if: matrix.python-version == '3.12'
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Type check
+        if: matrix.python-version == '3.12'
+        run: uv run mypy homecom_alt
+
+      - name: Test
+        run: uv run pytest --timeout=30 --cov=homecom_alt --cov-report=xml --error-for-skips
+
+      - name: Coverage check
+        if: matrix.python-version == '3.12'
+        run: uv run coverage report --fail-under=40

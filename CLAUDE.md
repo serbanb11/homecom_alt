@@ -10,40 +10,39 @@ Requires Python >= 3.12. Runtime dependencies: `aiohttp`, `tenacity`, `PyJWT`.
 
 ## Virtual Environment
 
-**Always use the project venv at `.venv/` for all commands.** Never install packages globally or run tools without the venv. Prefix all commands with `.venv/bin/` or activate the venv first.
+**Always use `uv run` to execute tools.** This automatically uses the project virtualenv. Run `uv sync --group dev` once to install all dependencies.
 
 ## Common Commands
 
 ### Testing
 ```bash
-.venv/bin/tox -e py312              # Run tests on Python 3.12
-.venv/bin/tox -e py313              # Run tests on Python 3.13
-.venv/bin/pytest --timeout=30 --cov=homecom_alt tests/  # Run tests directly with coverage
-.venv/bin/pytest tests/test_init.py::TestClassName::test_method  # Run a single test
+uv run pytest --timeout=30 --cov=homecom_alt tests/  # Run tests with coverage
+uv run pytest --timeout=30 --cov=homecom_alt --python 3.12 tests/  # Run on Python 3.12
+uv run pytest --timeout=30 --cov=homecom_alt --python 3.13 tests/  # Run on Python 3.13
+uv run pytest tests/test_init.py::TestClassName::test_method  # Run a single test
 ```
 
 ### Linting & Formatting
 ```bash
-.venv/bin/ruff check .              # Lint (all rules enabled, see pyproject.toml for ignores)
-.venv/bin/ruff format .             # Format code
-.venv/bin/ruff check --fix .        # Auto-fix lint issues
-.venv/bin/tox -e lint               # Lint via tox (check + format check)
+uv run ruff check .              # Lint (all rules enabled, see pyproject.toml for ignores)
+uv run ruff format .             # Format code
+uv run ruff check --fix .        # Auto-fix lint issues
+uv run ruff format --check .     # Check formatting without applying changes
 ```
 
 ### Type Checking
 ```bash
-.venv/bin/mypy homecom_alt          # Strict mode - all functions must have type hints
-.venv/bin/tox -e typing             # Type check via tox
+uv run mypy homecom_alt          # Strict mode - all functions must have type hints
 ```
 
 ### Coverage
 ```bash
-.venv/bin/tox -e coverage           # Coverage check (40% minimum threshold)
+uv run coverage report --fail-under=40   # Coverage check (40% minimum threshold)
 ```
 
 ### Run All Checks
 ```bash
-.venv/bin/tox                       # Runs: py312, py313, lint, typing, coverage
+uv run ruff check . && uv run ruff format --check . && uv run mypy homecom_alt && uv run pytest --timeout=30 --cov=homecom_alt tests/ && uv run coverage report --fail-under=40
 ```
 
 ## Architecture
@@ -87,4 +86,4 @@ HomeComAlt          — Base class: OAuth2 auth, HTTP requests, device discovery
 
 - **Ruff**: All rules enabled (`select = ["ALL"]`), target Python 3.13. Max complexity 25.
 - **MyPy**: Strict mode — all functions require complete type annotations.
-- **Version**: Defined in `setup.py` as `VERSION` constant.
+- **Version**: Defined in `pyproject.toml` as `version` under `[project]`.
