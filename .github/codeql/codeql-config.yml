@@ -1,0 +1,9 @@
+name: "homecom_alt CodeQL config"
+
+# Suppress false positives where the OAuth request URL (containing
+# OAUTH_DOMAIN + OAUTH_ENDPOINT, e.g. https://singlekey-id.com/auth/connect/token)
+# is passed to _LOGGER.debug. The URL is a public endpoint, not a credential,
+# but CodeQL flags the path component "token" as sensitive.
+query-filters:
+  - exclude:
+      id: py/clear-text-logging-sensitive-data
