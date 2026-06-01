@@ -75,6 +75,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
     BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
+    BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_VENTILATION,
@@ -1952,114 +1953,84 @@ class HomeComK40(HomeComAlt):
 
         today = datetime.now(tz=UTC)
 
-        notifications_task = asyncio.create_task(
-            limited_call(self.async_get_notifications(device_id))
-        )
-        dhw_task = asyncio.create_task(limited_call(self.async_get_dhw(device_id)))
-        heating_task = asyncio.create_task(limited_call(self.async_get_hc(device_id)))
-        holiday_task = asyncio.create_task(
-            limited_call(self.async_get_holiday_mode(device_id))
-        )
-        away_task = asyncio.create_task(
-            limited_call(self.async_get_away_mode(device_id))
-        )
-        power_task = asyncio.create_task(
-            limited_call(self.async_get_power_limitation(device_id))
-        )
-        outdoor_task = asyncio.create_task(
-            limited_call(self.async_get_outdoor_temp(device_id))
-        )
-        ventilation_task = asyncio.create_task(
-            limited_call(self.async_get_ventilation_zones(device_id))
-        )
-        zones_task = asyncio.create_task(limited_call(self.async_get_zones(device_id)))
-        flame_task = asyncio.create_task(
-            limited_call(self.async_get_hs_flame_indication(device_id))
-        )
-        energy_task = asyncio.create_task(
-            limited_call(self.async_get_energy_history(device_id))
-        )
-        hourly_energy_task = asyncio.create_task(
-            limited_call(self.async_get_energy_history_hourly(device_id))
-        )
-        energy_gas_unit_task = asyncio.create_task(
-            limited_call(self.async_get_energy_gas_unit(device_id))
-        )
-        humidity_task = asyncio.create_task(
-            limited_call(self.async_get_indoor_humidity(device_id))
-        )
-        devices_task = asyncio.create_task(
-            limited_call(self.async_get_devices_list(device_id))
-        )
-
-        heat_sources_keys = [
-            "pumpType",
-            "starts",
-            "returnTemperature",
-            "actualSupplyTemperature",
-            "actualModulation",
-            "collectorInflowTemp",
-            "collectorOutflowTemp",
-            "actualHeatDemand",
-            "totalWorkingTime",
-            "consumption",
-            "systemPressure",
+        # Fetch core resource endpoints + heat source sensors in a single bulk request
+        bulk_endpoints = [
+            BOSCHCOM_ENDPOINT_NOTIFICATIONS,
+            BOSCHCOM_ENDPOINT_DHW_CIRCUITS,
+            BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
+            BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+            BOSCHCOM_ENDPOINT_AWAY_MODE,
+            BOSCHCOM_ENDPOINT_POWER_LIMITATION,
+            BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
+            BOSCHCOM_ENDPOINT_VENTILATION,
+            BOSCHCOM_ENDPOINT_ZONES,
+            BOSCHCOM_ENDPOINT_HS_FLAME,
+            BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
+            BOSCHCOM_ENDPOINT_DEVICES,
+            # Heat source sensors
+            BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+            BOSCHCOM_ENDPOINT_HS_STARTS,
+            BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
+            BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
+            BOSCHCOM_ENDPOINT_HS_MODULATION,
+            BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
+            BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
+            BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
+            BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
+            BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
+            BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
         ]
-        heat_sources_coros = [
-            limited_call(self.async_get_hs_pump_type(device_id)),
-            limited_call(self.async_get_hs_starts(device_id)),
-            limited_call(self.async_get_hs_return_temp(device_id)),
-            limited_call(self.async_get_hs_supply_temp(device_id)),
-            limited_call(self.async_get_hs_modulation(device_id)),
-            limited_call(self.async_get_hs_brine_inflow_temp(device_id)),
-            limited_call(self.async_get_hs_brine_outflow_temp(device_id)),
-            limited_call(self.async_get_hs_heat_demand(device_id)),
-            limited_call(self.async_get_hs_working_time(device_id)),
-            limited_call(self.async_get_hs_total_consumption(device_id)),
-            limited_call(self.async_get_hs_system_pressure(device_id)),
-        ]
+        bulk_response = await self.async_request_bulk(device_id, bulk_endpoints) or {}
 
+        notifications = bulk_response.get(BOSCHCOM_ENDPOINT_NOTIFICATIONS)
+        dhw_circuits = bulk_response.get(BOSCHCOM_ENDPOINT_DHW_CIRCUITS)
+        heating_circuits = bulk_response.get(BOSCHCOM_ENDPOINT_HEATING_CIRCUITS)
+        holiday_mode = bulk_response.get(BOSCHCOM_ENDPOINT_HOLIDAY_MODE)
+        away_mode = bulk_response.get(BOSCHCOM_ENDPOINT_AWAY_MODE)
+        power_limitation = bulk_response.get(BOSCHCOM_ENDPOINT_POWER_LIMITATION)
+        outdoor_temp = bulk_response.get(BOSCHCOM_ENDPOINT_OUTDOOR_TEMP)
+        ventilation = bulk_response.get(BOSCHCOM_ENDPOINT_VENTILATION)
+        zones = bulk_response.get(BOSCHCOM_ENDPOINT_ZONES)
+        flame_indication = bulk_response.get(BOSCHCOM_ENDPOINT_HS_FLAME)
+        indoor_humidity = bulk_response.get(BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY)
+        devices = bulk_response.get(BOSCHCOM_ENDPOINT_DEVICES)
+
+        heat_sources = {
+            "pumpType": bulk_response.get(BOSCHCOM_ENDPOINT_HS_PUMP_TYPE) or {},
+            "starts": bulk_response.get(BOSCHCOM_ENDPOINT_HS_STARTS) or {},
+            "returnTemperature": bulk_response.get(BOSCHCOM_ENDPOINT_HS_RETURN_TEMP)
+            or {},
+            "actualSupplyTemperature": bulk_response.get(
+                BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP
+            )
+            or {},
+            "actualModulation": bulk_response.get(BOSCHCOM_ENDPOINT_HS_MODULATION)
+            or {},
+            "collectorInflowTemp": bulk_response.get(BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP)
+            or {},
+            "collectorOutflowTemp": bulk_response.get(BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP)
+            or {},
+            "actualHeatDemand": bulk_response.get(BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND)
+            or {},
+            "totalWorkingTime": bulk_response.get(BOSCHCOM_ENDPOINT_HS_WORKING_TIME)
+            or {},
+            "consumption": bulk_response.get(BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION)
+            or {},
+            "systemPressure": bulk_response.get(BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE)
+            or {},
+            "flameIndication": flame_indication or {},
+        }
+
+        # Energy endpoints fetched individually
         (
-            notifications,
-            dhw_circuits,
-            heating_circuits,
-            holiday_mode,
-            away_mode,
-            power_limitation,
-            outdoor_temp,
-            ventilation,
-            zones,
-            flame_indication,
             energy_history,
             hourly_energy_history,
             energy_gas_unit,
-            indoor_humidity,
-            devices,
-            *heat_sources_values,
         ) = await asyncio.gather(
-            notifications_task,
-            dhw_task,
-            heating_task,
-            holiday_task,
-            away_task,
-            power_task,
-            outdoor_task,
-            ventilation_task,
-            zones_task,
-            flame_task,
-            energy_task,
-            hourly_energy_task,
-            energy_gas_unit_task,
-            humidity_task,
-            devices_task,
-            *heat_sources_coros,
+            limited_call(self.async_get_energy_history(device_id)),
+            limited_call(self.async_get_energy_history_hourly(device_id)),
+            limited_call(self.async_get_energy_gas_unit(device_id)),
         )
-
-        heat_sources = {
-            k: v or {}
-            for k, v in zip(heat_sources_keys, heat_sources_values, strict=True)
-        }
-        heat_sources["flameIndication"] = flame_indication or {}
 
         (
             heat_sources["dayconsumption"],

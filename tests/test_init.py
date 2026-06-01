@@ -95,6 +95,52 @@ def _build_bulk_response(resource_paths, path_resolver):  # noqa: ANN001, ANN202
     return [{"gatewayId": DEVICE_ID, "resourcePaths": response_paths}]
 
 
+def _k40_bulk_route(url, args, kwargs, overrides=None):  # noqa: ANN001, ANN202, ARG001
+    """Handle a K40 bulk request in a mock route function.
+
+    *overrides* is an optional dict mapping path substrings to payloads.
+    """
+    posted_data = args[0] if args else kwargs.get("data", [{}])
+    resource_paths = posted_data[0].get("resourcePaths", [])
+    extra = overrides or {}
+
+    def _resolve(path):  # noqa: ANN001, ANN202, PLR0911, PLR0912
+        # Check overrides first
+        for needle, payload in extra.items():
+            if needle in path:
+                return payload
+        # Default responses for standard K40 bulk endpoints
+        if "notifications" in path:
+            return {"values": []}
+        if path.endswith("/dhwCircuits"):
+            return {"references": []}
+        if path.endswith("/heatingCircuits"):
+            return {"references": []}
+        if "holidayMode" in path:
+            return None
+        if "awayMode" in path:
+            return None
+        if "powerLimitation" in path:
+            return None
+        if "outdoor_t1" in path:
+            return None
+        if "ventilation" in path:
+            return {"references": []}
+        if path.endswith("/zones"):
+            return {"references": []}
+        if "flameIndication" in path:
+            return None
+        if "indoor_h1" in path:
+            return None
+        if path.endswith("/devices"):
+            return {"references": []}
+        if "heatSources" in path:
+            return None
+        return {}
+
+    return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
+
+
 # ===========================================================================
 # Base class - HTTP layer (existing tests, kept as-is with minor DRY-up)
 # ===========================================================================
@@ -1093,9 +1139,36 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0912, PLR0915
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0912
+        if "bulk" in url:
+            return _k40_bulk_route(
+                url,
+                args,
+                kwargs,
+                overrides={
+                    "/dhwCircuits": {"references": [{"id": "/dhwCircuits/dhw1"}]},
+                    "/heatingCircuits": {
+                        "references": [{"id": "/heatingCircuits/hc1"}]
+                    },
+                    "holidayMode": {"value": "off"},
+                    "awayMode": {"value": "off"},
+                    "powerLimitation": {"value": "off"},
+                    "outdoor_t1": {"value": 5.0},
+                    "indoor_h1": {"value": 43.5},
+                    "flameIndication": {"value": "ch"},
+                    "heatPumpType": {"value": "airToWater"},
+                    "numberOfStarts": {"value": 100},
+                    "returnTemperature": {"value": 30},
+                    "actualSupplyTemperature": {"value": 35},
+                    "actualModulation": {"value": 50},
+                    "collectorInflowTemp": {"value": 10},
+                    "collectorOutflowTemp": {"value": 8},
+                    "actualHeatDemand": {"value": 80},
+                    "workingTime": {"value": 5000},
+                    "totalConsumption": {"value": 1234},
+                    "systemPressure": {"value": 1.5},
+                },
+            )
         if "dhwCircuits" in url and "operationMode" in url:
             return _mock_json_response({"value": "auto"})
         if "dhwCircuits" in url and "actualTemp" in url:
@@ -1119,12 +1192,6 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             and "Remaining" not in url
         ):
             return _mock_json_response({"value": "off"})
-        if url.endswith("/resource/dhwCircuits"):
-            return _mock_json_response(
-                {
-                    "references": [{"id": "/dhwCircuits/dhw1"}],
-                }
-            )
         if "heatingCircuits" in url and "operationMode" in url:
             return _mock_json_response({"value": "auto"})
         if "heatingCircuits" in url and "currentSuWiMode" in url:
@@ -1159,62 +1226,12 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             return _mock_json_response({"value": 21})
         if "heatingCircuits" in url and "roomInfluence" in url:
             return _mock_json_response({"value": 3})
-        if url.endswith("/resource/heatingCircuits"):
-            return _mock_json_response(
-                {
-                    "references": [{"id": "/heatingCircuits/hc1"}],
-                }
-            )
-        if "heatPumpType" in url:
-            return _mock_json_response({"value": "airToWater"})
-        if "numberOfStarts" in url:
-            return _mock_json_response({"value": 100})
-        if "returnTemperature" in url:
-            return _mock_json_response({"value": 30})
-        if "actualSupplyTemperature" in url:
-            return _mock_json_response({"value": 35})
-        if "actualModulation" in url:
-            return _mock_json_response({"value": 50})
-        if "collectorInflowTemp" in url:
-            return _mock_json_response({"value": 10})
-        if "collectorOutflowTemp" in url:
-            return _mock_json_response({"value": 8})
-        if "actualHeatDemand" in url:
-            return _mock_json_response({"value": 80})
-        if "workingTime" in url:
-            return _mock_json_response({"value": 5000})
-        if "totalConsumption" in url:
-            return _mock_json_response({"value": 1234})
-        if "systemPressure" in url:
-            return _mock_json_response({"value": 1.5})
-        if "flameIndication" in url:
-            return _mock_json_response({"value": "ch"})
-        if "holidayMode" in url:
-            return _mock_json_response({"value": "off"})
-        if "awayMode" in url:
-            return _mock_json_response({"value": "off"})
-        if "powerLimitation" in url:
-            return _mock_json_response({"value": "off"})
-        if "outdoor_t1" in url:
-            return _mock_json_response({"value": 5.0})
-        if "indoor_h1" in url:
-            return _mock_json_response({"value": 43.5})
-        if "ventilation" in url:
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/zones"):
-            return _mock_json_response({"references": []})
         if "energy/historyEntries" in url:
             return _mock_json_response({"value": 1})
         if "energy/historyHourly" in url:
             return _mock_json_response({"value": []})
         if "energy/history" in url:
             return _mock_json_response({"value": []})
-        if url.endswith("/resource/devices"):
-            return _mock_json_response({"references": []})
-        if "bulk" in url:
-            return _mock_json_response(
-                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 99}}}]}]
-            )
         return _mock_json_response({})
 
     with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
@@ -1254,23 +1271,9 @@ async def test_k40_async_update_empty_references() -> None:
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
-        if url.endswith("/resource/dhwCircuits"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/heatingCircuits"):
-            return _mock_json_response({"references": []})
-        if "ventilation" in url:
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/zones"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/devices"):
-            return _mock_json_response({"references": []})
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
         if "bulk" in url:
-            return _mock_json_response(
-                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
-            )
+            return _k40_bulk_route(url, args, kwargs)
         return _mock_json_response({})
 
     with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
@@ -1311,27 +1314,20 @@ async def test_k40_async_update_with_ventilation() -> None:
         "demand/relativeHumidity": {"value": 55},
     }
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
-        if url.endswith("/resource/dhwCircuits"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/heatingCircuits"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/ventilation"):
-            return _mock_json_response({"references": [{"id": "/ventilation/zone1"}]})
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            return _k40_bulk_route(
+                url,
+                args,
+                kwargs,
+                overrides={
+                    "ventilation": {"references": [{"id": "/ventilation/zone1"}]},
+                },
+            )
         if "ventilation" in url:
             for needle, payload in vent_substring_values.items():
                 if needle in url:
                     return _mock_json_response(payload)
-        if url.endswith("/resource/zones"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/devices"):
-            return _mock_json_response({"references": []})
-        if "bulk" in url:
-            return _mock_json_response(
-                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
-            )
         return _mock_json_response({})
 
     with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
@@ -1968,28 +1964,28 @@ async def test_k40_devices_and_child_lock() -> None:
 
 
 @pytest.mark.asyncio
-async def test_k40_async_update_with_zones_and_devices() -> None:  # noqa: PLR0915, C901
+async def test_k40_async_update_with_zones_and_devices() -> None:
     """K40 update with zones and devices populated."""
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912, C901
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
-        if url.endswith("/resource/dhwCircuits"):
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/heatingCircuits"):
-            return _mock_json_response({"references": []})
-        if "ventilation" in url:
-            return _mock_json_response({"references": []})
-        if url.endswith("/resource/zones"):
-            return _mock_json_response({"references": [{"id": "/zones/zn1"}]})
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912
+        if "bulk" in url:
+            return _k40_bulk_route(
+                url,
+                args,
+                kwargs,
+                overrides={
+                    "/zones": {"references": [{"id": "/zones/zn1"}]},
+                    "/devices": {"references": [{"id": "/devices/device1"}]},
+                    "flameIndication": {"value": "ch"},
+                    "indoor_h1": {"value": 43.5},
+                },
+            )
         if "zones" in url and "temperatureActual" in url:
             return _mock_json_response({"value": 23.5})
         if "zones" in url and "manualTemperatureHeating" in url:
             return _mock_json_response({"value": 21})
-        if url.endswith("/resource/devices"):
-            return _mock_json_response({"references": [{"id": "/devices/device1"}]})
         if "devices" in url and "childLock" in url:
             return _mock_json_response({"value": "false"})
         if "devices" in url and "roomtemperature" in url:
@@ -2014,20 +2010,12 @@ async def test_k40_async_update_with_zones_and_devices() -> None:  # noqa: PLR09
             return _mock_json_response({})
         if "devices" in url and "currentRoomSetpoint" in url:
             return _mock_json_response({})
-        if "flameIndication" in url:
-            return _mock_json_response({"value": "ch"})
         if "energy/historyEntries" in url:
             return _mock_json_response({"value": 1})
         if "energy/historyHourly" in url:
             return _mock_json_response({"value": []})
         if "energy/history" in url:
             return _mock_json_response({"value": []})
-        if "indoor_h1" in url:
-            return _mock_json_response({"value": 43.5})
-        if "bulk" in url:
-            return _mock_json_response(
-                [{"resourcePaths": [{"gatewayResponse": {"payload": {"value": 0}}}]}]
-            )
         return _mock_json_response({})
 
     with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
