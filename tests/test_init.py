@@ -2391,7 +2391,7 @@ async def test_commodule_async_update() -> None:
     session = ClientSession()
     cm = _make_commodule(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, PLR0911, PLR0912
         if "notifications" in url:
             return _mock_json_response({"values": [{"code": "info"}]})
         if "eth0/state" in url:
@@ -2408,6 +2408,10 @@ async def test_commodule_async_update() -> None:
             return _mock_json_response({"value": "on"})
         if "/cp0/conf/rfid/secure" in url:
             return _mock_json_response({"value": "off"})
+        if "/cp0/conf/chargingStrategy" in url:
+            return _mock_json_response(
+                {"value": "default", "allowedValues": ["default", "solar-eco"]}
+            )
         if "/cp0/conf" in url:
             return _mock_json_response({"maxCurrent": 32})
         if "/cp0/info" in url:
@@ -2436,6 +2440,10 @@ async def test_commodule_async_update() -> None:
     assert ref["locked"] == {"value": "off"}
     assert ref["auth"] == {"value": "on"}
     assert ref["rfidSecure"] == {"value": "off"}
+    assert ref["chargingStrategy"] == {
+        "value": "default",
+        "allowedValues": ["default", "solar-eco"],
+    }
 
     await session.close()
 
@@ -2619,6 +2627,43 @@ async def test_commodule_put_conf_rfid_secure() -> None:
     with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
         await cm.async_put_cp_conf_rfid_secure(DEVICE_ID, "cp0", "on")
         assert mock_req.call_args[0][2] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_get_cp_conf_charging_strategy() -> None:
+    """Test commodule get charging strategy."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(
+        cm,
+        "_async_http_request",
+        new=AsyncMock(
+            return_value=_mock_json_response(
+                {"value": "default", "allowedValues": ["default", "solar-eco"]}
+            )
+        ),
+    ):
+        result = await cm.async_get_cp_conf_charging_strategy(DEVICE_ID, "cp0")
+        assert result == {
+            "value": "default",
+            "allowedValues": ["default", "solar-eco"],
+        }
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_commodule_put_conf_charging_strategy() -> None:
+    """Test commodule set charging strategy."""
+    session = ClientSession()
+    cm = _make_commodule(session)
+
+    with patch.object(cm, "_async_http_request", new=AsyncMock()) as mock_req:
+        await cm.async_put_cp_conf_charging_strategy(DEVICE_ID, "cp0", "solar-eco")
+        assert mock_req.call_args[0][2] == {"value": "solar-eco"}
 
     await session.close()
 

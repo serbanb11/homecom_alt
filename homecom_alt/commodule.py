@@ -17,6 +17,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_CP_CMD_START,
     BOSCHCOM_ENDPOINT_CP_CONF,
     BOSCHCOM_ENDPOINT_CP_CONF_AUTH,
+    BOSCHCOM_ENDPOINT_CP_CONF_CHARGING_STRATEGY,
     BOSCHCOM_ENDPOINT_CP_CONF_LOCKED,
     BOSCHCOM_ENDPOINT_CP_CONF_PRICE,
     BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
@@ -183,6 +184,23 @@ class HomeComCommodule(HomeComAlt):
         )
         return await self._to_data(response)
 
+    async def async_get_cp_conf_charging_strategy(
+        self, device_id: str, cp_id: str
+    ) -> Any:
+        """Get charge point charging strategy (default / solar-eco)."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_CHARGING_STRATEGY,
+        )
+        return await self._to_data(response)
+
     async def async_get_eth0_state(self, device_id: str) -> Any:
         """Get ethernet connection state."""
         await self.get_token()
@@ -275,6 +293,24 @@ class HomeComCommodule(HomeComAlt):
             + "/"
             + cp_id
             + BOSCHCOM_ENDPOINT_CP_CONF_RFID_SECURE,
+            {"value": value},
+            1,
+        )
+
+    async def async_put_cp_conf_charging_strategy(
+        self, device_id: str, cp_id: str, value: str
+    ) -> None:
+        """Set charge point charging strategy (default / solar-eco)."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_CP
+            + "/"
+            + cp_id
+            + BOSCHCOM_ENDPOINT_CP_CONF_CHARGING_STRATEGY,
             {"value": value},
             1,
         )
@@ -379,6 +415,9 @@ class HomeComCommodule(HomeComAlt):
                     ref["rfidSecure"] = await self.async_get_cp_conf_rfid_secure(
                         device_id, cp_id
                     )
+                    ref[
+                        "chargingStrategy"
+                    ] = await self.async_get_cp_conf_charging_strategy(device_id, cp_id)
         else:
             charge_points_data["references"] = {}
 
