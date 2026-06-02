@@ -2132,50 +2132,69 @@ class HomeComK40(HomeComAlt):
 
             async def populate_hc(ref: dict[str, Any]) -> None:
                 hc_id = ref["id"].split("/")[-1]
-                (
-                    ref["operationMode"],
-                    ref["currentSuWiMode"],
-                    ref["heatCoolMode"],
-                    ref["roomTemp"],
-                    ref["actualHumidity"],
-                    ref["manualRoomSetpoint"],
-                    ref["currentRoomSetpoint"],
-                    ref["coolingRoomTempSetpoint"],
-                    ref["maxSupply"],
-                    ref["minSupply"],
-                    ref["heatCurveMax"],
-                    ref["heatCurveMin"],
-                    ref["supplyTemperatureSetpoint"],
-                    ref["nightSwitchMode"],
-                    ref["control"],
-                    ref["nightThreshold"],
-                    ref["roomInfluence"],
-                ) = await asyncio.gather(
-                    limited_call(self.async_get_hc_operation_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_suwi_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heatcool_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_room_temp(device_id, hc_id)),
-                    limited_call(self.async_get_hc_actual_humidity(device_id, hc_id)),
-                    limited_call(
-                        self.async_get_hc_manual_room_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(
-                        self.async_get_hc_current_room_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(
-                        self.async_get_hc_cooling_room_temp_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(self.async_get_hc_max_supply(device_id, hc_id)),
-                    limited_call(self.async_get_hc_min_supply(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heat_curve_max(device_id, hc_id)),
-                    limited_call(self.async_get_hc_heat_curve_min(device_id, hc_id)),
-                    limited_call(
-                        self.async_get_hc_supply_temp_setpoint(device_id, hc_id)
-                    ),
-                    limited_call(self.async_get_hc_night_switch_mode(device_id, hc_id)),
-                    limited_call(self.async_get_hc_control(device_id, hc_id)),
-                    limited_call(self.async_get_hc_night_threshold(device_id, hc_id)),
-                    limited_call(self.async_get_hc_room_influence(device_id, hc_id)),
+                prefix = BOSCHCOM_ENDPOINT_HEATING_CIRCUITS + "/" + hc_id
+                hc_endpoints = [
+                    prefix + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
+                    prefix + BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
+                    prefix + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
+                    prefix + BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
+                    prefix + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+                    prefix + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
+                    prefix + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN,
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
+                    prefix + BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_HC_CONTROL,
+                    prefix + BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD,
+                    prefix + BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE,
+                ]
+                hc_bulk = await self.async_request_bulk(device_id, hc_endpoints) or {}
+                ref["operationMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE
+                )
+                ref["currentSuWiMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUWI_MODE
+                )
+                ref["heatCoolMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE
+                )
+                ref["roomTemp"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_ROOM_TEMP)
+                ref["actualHumidity"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY
+                )
+                ref["manualRoomSetpoint"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT
+                )
+                ref["currentRoomSetpoint"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT
+                )
+                ref["coolingRoomTempSetpoint"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT
+                )
+                ref["maxSupply"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY)
+                ref["minSupply"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY)
+                ref["heatCurveMax"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX
+                )
+                ref["heatCurveMin"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MIN
+                )
+                ref["supplyTemperatureSetpoint"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT
+                )
+                ref["nightSwitchMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_NIGHT_SWITCH_MODE
+                )
+                ref["control"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_CONTROL)
+                ref["nightThreshold"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_NIGHT_THRESHOLD
+                )
+                ref["roomInfluence"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_ROOM_INFLUENCE
                 )
 
                 (
@@ -2209,76 +2228,79 @@ class HomeComK40(HomeComAlt):
 
             async def populate_vent(ref: dict[str, Any]) -> None:
                 zone_id = ref["id"].split("/")[-1]
-                (
-                    ref["exhaustFanLevel"],
-                    ref["maxIndoorAirQuality"],
-                    ref["maxRelativeHumidity"],
-                    ref["operationMode"],
-                    ref["exhaustTemp"],
-                    ref["extractTemp"],
-                    ref["internalAirQuality"],
-                    ref["internalHumidity"],
-                    ref["outdoorTemp"],
-                    ref["supplyTemp"],
-                    ref["summerBypassEnable"],
-                    ref["summerBypassDuration"],
-                    ref["summerBypassFlapPower"],
-                    ref["summerBypassMinSupply"],
-                    ref["summerBypassPassiveCooling"],
-                    ref["demandindoorAirQuality"],
-                    ref["demandrelativeHumidity"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_ventilation_exhaustfanlevel(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_humidity(device_id, zone_id)
-                    ),
-                    limited_call(self.async_get_ventilation_mode(device_id, zone_id)),
-                    limited_call(
-                        self.async_get_ventilation_exhaust_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_extract_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_internal_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_internal_humidity(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_outdoor_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_supply_temp(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_enable(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_duration(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_flap_power(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_min_supply(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_summer_passive_cooling(
-                            device_id, zone_id
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_demand_quality(device_id, zone_id)
-                    ),
-                    limited_call(
-                        self.async_get_ventilation_demand_humidity(device_id, zone_id)
-                    ),
+                prefix = BOSCHCOM_ENDPOINT_VENTILATION + "/" + zone_id
+                vent_endpoints = [
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_FAN,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_QUALITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_FLAP_POWER,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_MIN_SUPPLY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+                ]
+                vent_bulk = (
+                    await self.async_request_bulk(device_id, vent_endpoints) or {}
+                )
+                ref["exhaustFanLevel"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_FAN
+                )
+                ref["maxIndoorAirQuality"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_QUALITY
+                )
+                ref["maxRelativeHumidity"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY
+                )
+                ref["operationMode"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE
+                )
+                ref["exhaustTemp"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP
+                )
+                ref["extractTemp"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP
+                )
+                ref["internalAirQuality"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY
+                )
+                ref["internalHumidity"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY
+                )
+                ref["outdoorTemp"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_OUTDOOR_TEMP
+                )
+                ref["supplyTemp"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUPPLY_TEMP
+                )
+                ref["summerBypassEnable"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_ENABLE
+                )
+                ref["summerBypassDuration"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_DURATION
+                )
+                ref["summerBypassFlapPower"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_FLAP_POWER
+                )
+                ref["summerBypassMinSupply"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_MIN_SUPPLY
+                )
+                ref["summerBypassPassiveCooling"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING
+                )
+                ref["demandindoorAirQuality"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY
+                )
+                ref["demandrelativeHumidity"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY
                 )
 
             await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))

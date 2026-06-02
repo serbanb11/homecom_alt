@@ -124,7 +124,7 @@ def _k40_bulk_route(url, args, kwargs, overrides=None):  # noqa: ANN001, ANN202,
             return None
         if "outdoor_t1" in path:
             return None
-        if "ventilation" in path:
+        if path.endswith("/ventilation"):
             return {"references": []}
         if path.endswith("/zones"):
             return {"references": []}
@@ -136,7 +136,7 @@ def _k40_bulk_route(url, args, kwargs, overrides=None):  # noqa: ANN001, ANN202,
             return {"references": []}
         if "heatSources" in path:
             return None
-        return {}
+        return None
 
     return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
 
@@ -1139,36 +1139,88 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     session = ClientSession()
     k40 = _make_k40(session)
 
-    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0912
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001, C901, PLR0911, PLR0915
         if "bulk" in url:
-            return _k40_bulk_route(
-                url,
-                args,
-                kwargs,
-                overrides={
-                    "/dhwCircuits": {"references": [{"id": "/dhwCircuits/dhw1"}]},
-                    "/heatingCircuits": {
-                        "references": [{"id": "/heatingCircuits/hc1"}]
-                    },
-                    "holidayMode": {"value": "off"},
-                    "awayMode": {"value": "off"},
-                    "powerLimitation": {"value": "off"},
-                    "outdoor_t1": {"value": 5.0},
-                    "indoor_h1": {"value": 43.5},
-                    "flameIndication": {"value": "ch"},
-                    "heatPumpType": {"value": "airToWater"},
-                    "numberOfStarts": {"value": 100},
-                    "returnTemperature": {"value": 30},
-                    "actualSupplyTemperature": {"value": 35},
-                    "actualModulation": {"value": 50},
-                    "collectorInflowTemp": {"value": 10},
-                    "collectorOutflowTemp": {"value": 8},
-                    "actualHeatDemand": {"value": 80},
-                    "workingTime": {"value": 5000},
-                    "totalConsumption": {"value": 1234},
-                    "systemPressure": {"value": 1.5},
-                },
-            )
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202, PLR0911, PLR0912, C901
+                if path.endswith("/dhwCircuits"):
+                    return {"references": [{"id": "/dhwCircuits/dhw1"}]}
+                if path.endswith("/heatingCircuits"):
+                    return {"references": [{"id": "/heatingCircuits/hc1"}]}
+                if "holidayMode" in path:
+                    return {"value": "off"}
+                if "awayMode" in path:
+                    return {"value": "off"}
+                if "powerLimitation" in path:
+                    return {"value": "off"}
+                if "outdoor_t1" in path:
+                    return {"value": 5.0}
+                if "indoor_h1" in path:
+                    return {"value": 43.5}
+                if "flameIndication" in path:
+                    return {"value": "ch"}
+                if "heatPumpType" in path:
+                    return {"value": "airToWater"}
+                if "numberOfStarts" in path:
+                    return {"value": 100}
+                if "returnTemperature" in path:
+                    return {"value": 30}
+                if "actualSupplyTemperature" in path:
+                    return {"value": 35}
+                if "actualModulation" in path:
+                    return {"value": 50}
+                if "collectorInflowTemp" in path:
+                    return {"value": 10}
+                if "collectorOutflowTemp" in path:
+                    return {"value": 8}
+                if "actualHeatDemand" in path:
+                    return {"value": 80}
+                if "workingTime" in path:
+                    return {"value": 5000}
+                if "totalConsumption" in path:
+                    return {"value": 1234}
+                if "systemPressure" in path:
+                    return {"value": 1.5}
+                # Per-HC endpoints
+                if "heatingCircuits" in path and "operationMode" in path:
+                    return {"value": "auto"}
+                if "heatingCircuits" in path and "currentSuWiMode" in path:
+                    return {"value": "summer"}
+                if "heatingCircuits" in path and "heatCoolMode" in path:
+                    return {"value": "heat"}
+                if "heatingCircuits" in path and "roomtemperature" in path:
+                    return {"value": 21.5}
+                if "heatingCircuits" in path and "actualHumidity" in path:
+                    return {"value": 55}
+                if "heatingCircuits" in path and "manualRoomSetpoint" in path:
+                    return {"value": 20}
+                if "heatingCircuits" in path and "currentRoomSetpoint" in path:
+                    return {"value": 21}
+                if "heatingCircuits" in path and "cooling/roomTempSetpoint" in path:
+                    return {"value": 25}
+                if "heatingCircuits" in path and "maxSupply" in path:
+                    return {"value": 90}
+                if "heatingCircuits" in path and "minSupply" in path:
+                    return {"value": 20}
+                if "heatingCircuits" in path and "heatCurveMax" in path:
+                    return {"value": 75}
+                if "heatingCircuits" in path and "heatCurveMin" in path:
+                    return {"value": 20}
+                if "heatingCircuits" in path and "supplyTemperatureSetpoint" in path:
+                    return {"value": 39}
+                if "heatingCircuits" in path and "nightSwitchMode" in path:
+                    return {"value": "off"}
+                if "heatingCircuits" in path and "control" in path:
+                    return {"value": "weather"}
+                if "heatingCircuits" in path and "nightThreshold" in path:
+                    return {"value": 21}
+                if "heatingCircuits" in path and "roomInfluence" in path:
+                    return {"value": 3}
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         if "dhwCircuits" in url and "operationMode" in url:
             return _mock_json_response({"value": "auto"})
         if "dhwCircuits" in url and "actualTemp" in url:
@@ -1192,40 +1244,6 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
             and "Remaining" not in url
         ):
             return _mock_json_response({"value": "off"})
-        if "heatingCircuits" in url and "operationMode" in url:
-            return _mock_json_response({"value": "auto"})
-        if "heatingCircuits" in url and "currentSuWiMode" in url:
-            return _mock_json_response({"value": "summer"})
-        if "heatingCircuits" in url and "heatCoolMode" in url:
-            return _mock_json_response({"value": "heat"})
-        if "heatingCircuits" in url and "roomtemperature" in url:
-            return _mock_json_response({"value": 21.5})
-        if "heatingCircuits" in url and "actualHumidity" in url:
-            return _mock_json_response({"value": 55})
-        if "heatingCircuits" in url and "manualRoomSetpoint" in url:
-            return _mock_json_response({"value": 20})
-        if "heatingCircuits" in url and "currentRoomSetpoint" in url:
-            return _mock_json_response({"value": 21})
-        if "heatingCircuits" in url and "cooling/roomTempSetpoint" in url:
-            return _mock_json_response({"value": 25})
-        if "heatingCircuits" in url and "maxSupply" in url:
-            return _mock_json_response({"value": 90})
-        if "heatingCircuits" in url and "minSupply" in url:
-            return _mock_json_response({"value": 20})
-        if "heatingCircuits" in url and "heatCurveMax" in url:
-            return _mock_json_response({"value": 75})
-        if "heatingCircuits" in url and "heatCurveMin" in url:
-            return _mock_json_response({"value": 20})
-        if "heatingCircuits" in url and "supplyTemperatureSetpoint" in url:
-            return _mock_json_response({"value": 39})
-        if "heatingCircuits" in url and "nightSwitchMode" in url:
-            return _mock_json_response({"value": "off"})
-        if "heatingCircuits" in url and "control" in url:
-            return _mock_json_response({"value": "weather"})
-        if "heatingCircuits" in url and "nightThreshold" in url:
-            return _mock_json_response({"value": 21})
-        if "heatingCircuits" in url and "roomInfluence" in url:
-            return _mock_json_response({"value": 3})
         if "energy/historyEntries" in url:
             return _mock_json_response({"value": 1})
         if "energy/historyHourly" in url:
@@ -1316,18 +1334,20 @@ async def test_k40_async_update_with_ventilation() -> None:
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
         if "bulk" in url:
-            return _k40_bulk_route(
-                url,
-                args,
-                kwargs,
-                overrides={
-                    "ventilation": {"references": [{"id": "/ventilation/zone1"}]},
-                },
-            )
-        if "ventilation" in url:
-            for needle, payload in vent_substring_values.items():
-                if needle in url:
-                    return _mock_json_response(payload)
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202
+                if path.endswith("/ventilation"):
+                    return {"references": [{"id": "/ventilation/zone1"}]}
+                # Per-ventilation zone endpoints
+                if "ventilation" in path:
+                    for needle, payload in vent_substring_values.items():
+                        if needle in path:
+                            return payload
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         return _mock_json_response({})
 
     with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
