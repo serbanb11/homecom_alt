@@ -3159,11 +3159,19 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
     ]
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
-        for needle, payload in icom_routes:
-            if needle in url:
-                return _mock_json_response(payload)
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202
+                if "notifications" in path:
+                    return {"values": []}
+                for needle, payload in icom_routes:
+                    if needle in path:
+                        return payload
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         if url.endswith("/resource/gateway/versionFirmware"):
             return _mock_json_response({"value": "1.0"})
         return _mock_json_response({})
