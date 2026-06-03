@@ -53,8 +53,8 @@ All exceptions inherit from `BhcError`.
 [uv](https://docs.astral.sh/uv/) is required. Install it once, then:
 
 ```bash
-git clone https://github.com/serbanb11/homecom-alt.git
-cd homecom-alt
+git clone https://github.com/serbanb11/homecom_alt.git
+cd homecom_alt
 uv sync --group dev
 uv run pre-commit install
 ```

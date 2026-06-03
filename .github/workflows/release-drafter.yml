@@ -27,9 +27,12 @@ jobs:
       - name: Find Version
         id: version
         run: |
-            version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
-            echo "Version from pyproject.toml: $version"
-            echo "version=$version" >> "$GITHUB_OUTPUT"
+          version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+          echo "Version from pyproject.toml: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run Release Drafter
+        uses: release-drafter/release-drafter@v7
         with:
           tag: ${{ steps.version.outputs.version }}
           name: Version ${{ steps.version.outputs.version }}
