@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -372,7 +373,8 @@ class HomeComIcom(HomeComK40):
         heating_circuits = heating_circuits or {}
         hc_refs = heating_circuits.get("references", [])
         if hc_refs:
-            for ref in hc_refs:
+
+            async def populate_hc(ref: dict[str, Any]) -> None:
                 hc_id = ref["id"].split("/")[-1]
                 prefix = BOSCHCOM_ENDPOINT_HEATING_CIRCUITS + "/" + hc_id
                 hc_endpoints = [
@@ -446,6 +448,8 @@ class HomeComIcom(HomeComK40):
                 ref["switchProgramB"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_B
                 )
+
+            await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
         else:
             heating_circuits["references"] = []
 
@@ -453,7 +457,8 @@ class HomeComIcom(HomeComK40):
         dhw_circuits = dhw_circuits or {}
         dhw_refs = dhw_circuits.get("references", [])
         if dhw_refs:
-            for ref in dhw_refs:
+
+            async def populate_dhw(ref: dict[str, Any]) -> None:
                 dhw_id = ref["id"].split("/")[-1]
                 prefix = BOSCHCOM_ENDPOINT_DHW_CIRCUITS + "/" + dhw_id
                 dhw_endpoints = [
@@ -507,6 +512,8 @@ class HomeComIcom(HomeComK40):
                         prefix + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL + "/high"
                     ),
                 }
+
+            await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
         else:
             dhw_circuits["references"] = []
 
@@ -518,7 +525,8 @@ class HomeComIcom(HomeComK40):
         ventilation = ventilation or {}
         vent_refs = ventilation.get("references", [])
         if vent_refs:
-            for ref in vent_refs:
+
+            async def populate_vent(ref: dict[str, Any]) -> None:
                 zone_id = ref["id"].split("/")[-1]
                 prefix = BOSCHCOM_ENDPOINT_VENTILATION + "/" + zone_id
                 vent_endpoints = [
@@ -535,11 +543,14 @@ class HomeComIcom(HomeComK40):
                     prefix + BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE
                 )
 
+            await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))
+
         # --- Per-holiday-mode bulk ---
         holiday_modes = holiday_modes or {}
         hm_refs = holiday_modes.get("references", [])
         if hm_refs:
-            for ref in hm_refs:
+
+            async def populate_hm(ref: dict[str, Any]) -> None:
                 hm_id = ref["id"].split("/")[-1]
                 prefix = BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES + "/" + hm_id
                 hm_endpoints = [
@@ -555,6 +566,8 @@ class HomeComIcom(HomeComK40):
                     prefix + BOSCHCOM_ENDPOINT_HM_FIX_TEMP
                 )
                 ref["startStop"] = hm_bulk.get(prefix + BOSCHCOM_ENDPOINT_HM_START_STOP)
+
+            await asyncio.gather(*(populate_hm(ref) for ref in hm_refs))
 
         return BHCDeviceIcom(
             device=device_id,
