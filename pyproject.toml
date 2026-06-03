@@ -1,3 +1,54 @@
+[project]
+name = "homecom_alt"
+version = "1.6.3"
+description = "Python wrapper for controlling devices managed by HomeCom Easy APP."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "serbanb11" }]
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.9.4",
+    "PyJWT>=2.1.0",
+    "tenacity",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/serbanb11/homecom-alt"
+
+[build-system]
+requires = ["uv_build>=0.11.18,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "homecom_alt"
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "aioresponses==0.7.8",
+    "coverage==7.10.5",
+    "mypy==1.17.1",
+    "pre-commit==4.1.0",
+    "pytest==8.4.1",
+    "pytest-asyncio==1.1.0",
+    "pytest-cov>=2.12.1",
+    "pytest-error-for-skips==2.0.2",
+    "pytest-timeout==2.3.1",
+    "ruff==0.12.10",
+    "syrupy==4.8.1",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
