@@ -3310,11 +3310,21 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
     needles = sorted(rrc2_substring_values.keys(), key=len, reverse=True)
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
-        if "notifications" in url:
-            return _mock_json_response({"values": []})
-        for needle in needles:
-            if needle in url:
-                return _mock_json_response(rrc2_substring_values[needle])
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202
+                # Prefix with /resource to match the lookup keys
+                full = "/resource" + path if not path.startswith("/resource") else path
+                for needle in needles:
+                    if needle in full:
+                        return rrc2_substring_values[needle]
+                if "notifications" in path:
+                    return {"values": []}
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         if url.endswith("/resource/gateway/versionFirmware"):
             return _mock_json_response({"value": "1.0"})
         return _mock_json_response({})
