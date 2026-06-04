@@ -1,6 +1,6 @@
 [project]
 name = "homecom_alt"
-version = "1.6.3"
+version = "1.6.4"
 description = "Python wrapper for controlling devices managed by HomeCom Easy APP."
 readme = "README.md"
 license = { text = "MIT" }
