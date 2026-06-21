@@ -70,6 +70,12 @@ _LOGGER = logging.getLogger(__name__)
 
 _NOT_FOUND_CACHE_TTL: float = 86400.0  # 24 hours
 
+# Per-endpoint statuses that are expected for unsupported/forbidden resources.
+# These are logged at debug level to avoid spamming the log (see issue #143).
+_EXPECTED_ENDPOINT_STATUSES: frozenset[int] = frozenset(
+    {HTTPStatus.FORBIDDEN.value, HTTPStatus.NOT_FOUND.value}
+)
+
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -174,16 +180,12 @@ class HomeComAlt:
                 endpoint = sent_to_original.get(returned_path, returned_path)
                 server_status = endpoint_response["serverStatus"]
                 if server_status != HTTPStatus.OK.value:
-                    _LOGGER.warning("Endpoint %s returned %s", endpoint, server_status)
+                    self._log_endpoint_status(endpoint, server_status)
                     continue
                 device_endpoint_response = endpoint_response["gatewayResponse"]
                 device_endpoint_response_status = device_endpoint_response["status"]
                 if device_endpoint_response_status != HTTPStatus.OK.value:
-                    _LOGGER.warning(
-                        "Endpoint %s returned %s",
-                        endpoint,
-                        device_endpoint_response_status,
-                    )
+                    self._log_endpoint_status(endpoint, device_endpoint_response_status)
                     continue
                 payload = device_endpoint_response["payload"]
                 result[endpoint] = payload
@@ -191,6 +193,19 @@ class HomeComAlt:
             return None
         else:
             return result
+
+    @staticmethod
+    def _log_endpoint_status(endpoint: str, status: int) -> None:
+        """Log a non-OK per-endpoint bulk status.
+
+        Expected statuses (403/404) for unsupported or forbidden resources are
+        logged at debug level to avoid spamming the log; anything else is a
+        warning. See issue #143.
+        """
+        if status in _EXPECTED_ENDPOINT_STATUSES:
+            _LOGGER.debug("Endpoint %s returned %s", endpoint, status)
+        else:
+            _LOGGER.warning("Endpoint %s returned %s", endpoint, status)
 
     async def _async_http_request(  # noqa: PLR0912
         self,

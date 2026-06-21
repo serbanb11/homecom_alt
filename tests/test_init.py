@@ -3386,3 +3386,28 @@ async def test_rrc2_async_set_zone_manual_temp_heating() -> None:
     assert captured["args"][0] == {"value": 21.5}
 
     await session.close()
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_level"),
+    [
+        (HTTPStatus.FORBIDDEN.value, "DEBUG"),
+        (HTTPStatus.NOT_FOUND.value, "DEBUG"),
+        (HTTPStatus.BAD_GATEWAY.value, "WARNING"),
+        (HTTPStatus.INTERNAL_SERVER_ERROR.value, "WARNING"),
+    ],
+)
+def test_log_endpoint_status_levels(caplog, status, expected_level) -> None:  # noqa: ANN001
+    """Expected 403/404 bulk statuses log at debug; unexpected ones at warning.
+
+    Regression test for issue #143 (log spamming).
+    """
+    endpoint = "/resource/devices/dev1/roomtemperature"
+    with caplog.at_level("DEBUG", logger="homecom_alt.base"):
+        HomeComAlt._log_endpoint_status(endpoint, status)
+
+    records = [r for r in caplog.records if r.name == "homecom_alt.base"]
+    assert len(records) == 1
+    assert records[0].levelname == expected_level
+    assert endpoint in records[0].getMessage()
+    assert str(status) in records[0].getMessage()
