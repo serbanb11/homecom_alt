@@ -92,6 +92,7 @@ BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
     "/resource/airConditioning/airPurificationMode"
 )
 BOSCHCOM_ENDPOINT_AWAY_MODE: Final[str] = "/resource/system/awayMode/enabled"
+BOSCHCOM_ENDPOINT_SILENT_MODE: Final[str] = "/resource/system/silentMode/enabled"
 BOSCHCOM_ENDPOINT_POWER_LIMITATION: Final[str] = (
     "/resource/system/powerLimitation/active"
 )
@@ -122,6 +123,9 @@ BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
 BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModulation"
 BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
     "/resource/heatSources/systemPressure"
+)
+BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER: Final[str] = (
+    "/resource/heatSources/additionalHeater/operationMode"
 )
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"

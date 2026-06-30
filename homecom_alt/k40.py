@@ -61,6 +61,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
+    BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER,
     BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
@@ -78,6 +79,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
+    BOSCHCOM_ENDPOINT_SILENT_MODE,
     BOSCHCOM_ENDPOINT_VENTILATION,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
@@ -607,6 +609,56 @@ class HomeComK40(HomeComAlt):
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_AWAY_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_additional_heater_mode(self, device_id: str) -> Any:
+        """Get additional (electric) heater operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER,
+        )
+        return await self._to_data(response)
+
+    async def async_put_additional_heater_mode(self, device_id: str, mode: str) -> None:
+        """Set additional (electric) heater operation mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_silent_mode(self, device_id: str) -> Any:
+        """Get silent mode status."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SILENT_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_silent_mode(self, device_id: str, mode: str) -> None:
+        """Set silent mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SILENT_MODE,
             {"value": mode},
             1,
         )
