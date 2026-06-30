@@ -45,7 +45,7 @@ dev = [
     "pytest-cov>=2.12.1",
     "pytest-error-for-skips==2.0.2",
     "pytest-timeout==2.3.1",
-    "ruff==0.15.18",
+    "ruff==0.15.20",
     "syrupy==5.3.1",
 ]
 
