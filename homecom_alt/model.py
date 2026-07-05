@@ -117,6 +117,7 @@ class BHCDeviceWddw2:
     dhw_circuits: list | None
     heat_sources: dict | None = None
     water_total_consumption: dict | None = None
+    holiday_mode: dict | None = None
 
 
 @dataclass(frozen=True)

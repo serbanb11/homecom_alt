@@ -2376,6 +2376,132 @@ async def test_wddw2_dhw_operation_mode_put() -> None:
     await session.close()
 
 
+@pytest.mark.asyncio
+async def test_wddw2_dhw_safety_temperature_get() -> None:
+    """WDDW2 safety temperature getter hits the dhw circuit endpoint."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    with patch.object(
+        wddw2,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "on"})),
+    ) as mock_req:
+        result = await wddw2.async_get_dhw_safety_temperature(DEVICE_ID, "dhw1")
+        assert result == {"value": "on"}
+        assert mock_req.call_args[0][1].endswith("/dhwCircuits/dhw1/safetyTemperature")
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_dhw_safety_temperature_put() -> None:
+    """WDDW2 safety temperature setter PUTs the requested value."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    with patch.object(wddw2, "_async_http_request", new=AsyncMock()) as mock_req:
+        await wddw2.async_put_dhw_safety_temperature(DEVICE_ID, "dhw1", "off")
+        assert mock_req.call_args[0][0] == "put"
+        assert mock_req.call_args[0][1].endswith("/dhwCircuits/dhw1/safetyTemperature")
+        assert mock_req.call_args[0][2] == {"value": "off"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_holiday_mode_get() -> None:
+    """WDDW2 holiday mode getter hits the system endpoint."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    with patch.object(
+        wddw2,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "on"})),
+    ) as mock_req:
+        result = await wddw2.async_get_holiday_mode(DEVICE_ID)
+        assert result == {"value": "on"}
+        assert mock_req.call_args[0][1].endswith("/resource/system/holidayMode")
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_holiday_mode_put() -> None:
+    """WDDW2 holiday mode setter PUTs the requested value."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    with patch.object(wddw2, "_async_http_request", new=AsyncMock()) as mock_req:
+        await wddw2.async_put_holiday_mode(DEVICE_ID, "on")
+        assert mock_req.call_args[0][0] == "put"
+        assert mock_req.call_args[0][1].endswith("/resource/system/holidayMode")
+        assert mock_req.call_args[0][2] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_async_update_populates_safety_and_holiday() -> None:
+    """async_update enriches the circuit with safety temp and system holiday mode."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if url.endswith("/resource/dhwCircuits"):
+            return _mock_json_response({"references": [{"id": "/dhwCircuits/dhw1"}]})
+        if "dhwCircuits" in url and "operationMode" in url:
+            return _mock_json_response(
+                {"value": "auto", "allowedValues": ["off", "manual"]}
+            )
+        if "safetyTemperature" in url:
+            return _mock_json_response({"value": "on"})
+        if url.endswith("/resource/system/holidayMode"):
+            return _mock_json_response({"value": "off"})
+        return _mock_json_response({})
+
+    with patch.object(wddw2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await wddw2.async_update(DEVICE_ID)
+
+    assert result.holiday_mode == {"value": "off"}
+    assert result.dhw_circuits[0]["safetyTemperature"] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_wddw2_async_update_readonly_templevel_fallback() -> None:
+    """Read-only device with no allowedValues falls back to manual/bath levels."""
+    session = ClientSession()
+    wddw2 = _make_wddw2(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "notifications" in url:
+            return _mock_json_response({"values": []})
+        if url.endswith("/resource/dhwCircuits"):
+            return _mock_json_response({"references": [{"id": "/dhwCircuits/dhw1"}]})
+        if "dhwCircuits" in url and "operationMode" in url:
+            # Read-only TR4001: no allowedValues.
+            return _mock_json_response({"value": "eco", "allowedValues": []})
+        if "manualsetpoint" in url:
+            return _mock_json_response({"value": 48})
+        if "temperatureLevels/bath" in url:
+            return _mock_json_response({"value": 52})
+        return _mock_json_response({})
+
+    with patch.object(wddw2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await wddw2.async_update(DEVICE_ID)
+
+    temp_level = result.dhw_circuits[0]["tempLevel"]
+    assert temp_level["manual"] == {"value": 48}
+    assert temp_level["bath"] == {"value": 52}
+
+    await session.close()
+
+
 # ===========================================================================
 # HomeComCommodule (wallbox / EV charger)
 # ===========================================================================
