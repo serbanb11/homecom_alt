@@ -117,6 +117,7 @@ class BHCDeviceWddw2:
     dhw_circuits: list | None
     heat_sources: dict | None = None
     water_total_consumption: dict | None = None
+    holiday_mode: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -129,3 +130,17 @@ class BHCDeviceCommodule:
     charge_points: list | None
     eth0_state: dict | None
     wifi_state: dict | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceBaconRac:
+    """Data class for a Matter/Bacon-commissioned RAC (AC) device.
+
+    ``reported``/``desired`` are the raw shadow state maps
+    (``powerEnabled``, ``opMode``, ``fanSpeed``, ``tempSetpoint`` …).
+    """
+
+    device: dict | None
+    firmware: list | None
+    reported: dict | None
+    desired: dict | None

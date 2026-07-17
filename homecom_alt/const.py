@@ -92,6 +92,7 @@ BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
     "/resource/airConditioning/airPurificationMode"
 )
 BOSCHCOM_ENDPOINT_AWAY_MODE: Final[str] = "/resource/system/awayMode/enabled"
+BOSCHCOM_ENDPOINT_SILENT_MODE: Final[str] = "/resource/system/silentMode/enabled"
 BOSCHCOM_ENDPOINT_POWER_LIMITATION: Final[str] = (
     "/resource/system/powerLimitation/active"
 )
@@ -123,6 +124,9 @@ BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModul
 BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
     "/resource/heatSources/systemPressure"
 )
+BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER: Final[str] = (
+    "/resource/heatSources/additionalHeater/operationMode"
+)
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
 BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
@@ -142,6 +146,7 @@ BOSCHCOM_ENDPOINT_DWH_ACTUAL_TEMP: Final[str] = "/actualTemp"
 BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL: Final[str] = "/temperatureLevels"
 BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_HIGH: Final[str] = "/temperatureLevels/high"
 BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL: Final[str] = "/manualsetpoint"
+BOSCHCOM_ENDPOINT_DWH_SAFETY_TEMP: Final[str] = "/safetyTemperature"
 BOSCHCOM_ENDPOINT_DWH_CURRENT_TEMP_LEVEL: Final[str] = "/currentTemperatureLevel"
 BOSCHCOM_ENDPOINT_DWH_CHARGE: Final[str] = "/charge"
 BOSCHCOM_ENDPOINT_DWH_CHARGE_REMAINING_TIME: Final[str] = "/chargeRemainingTime"
@@ -281,6 +286,7 @@ BOSCHCOM_ENDPOINT_WIFI_STATE: Final[str] = "/resource/gateway/wifi/state"
 BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS: Final[str] = "/resource/solarCircuits"
 BOSCHCOM_ENDPOINT_SYSTEM_BUS: Final[str] = "/resource/system/bus"
 BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES: Final[str] = "/resource/system/holidayModes"
+BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODE: Final[str] = "/resource/system/holidayMode"
 BOSCHCOM_ENDPOINT_HM_DHW_MODE: Final[str] = "/dhwMode"
 BOSCHCOM_ENDPOINT_HM_HC_MODE: Final[str] = "/hcMode"
 BOSCHCOM_ENDPOINT_HM_FIX_TEMP: Final[str] = "/fixTemperature"
@@ -330,3 +336,15 @@ MAX_CONCURRENT: Final[int] = 3
 
 # Maximum number of resource paths per bulk API request
 MAX_BULK_ENDPOINTS: Final[int] = 30
+
+# --- Bacon (Matter-commissioned) backend: MQTT device-shadow ----------------
+BACON_RAC_TYPE: Final[str] = "bacon_rac"
+BACON_MQTT_PORT: Final[int] = 443
+BACON_WS_PATH: Final[str] = "/mqtt"
+BACON_USER_AGENT: Final[str] = "DashApp/4.0.0 (Android-Release)"
+# The bacon backend is region-scoped. The HomeCom Easy 4.0.0 app hardcodes
+# eu-central-1 ("euc1"); a US region ("use1") also exists. Exposed as a default
+# so another region only needs a different value (no code change).
+BACON_DEFAULT_REGION: Final[str] = "euc1"
+BACON_KNOWN_REGIONS: Final[tuple[str, ...]] = ("euc1", "use1")
+BACON_HOST_TEMPLATE: Final[str] = "{service}.{region}.bacon.bosch-tt-cw.com"

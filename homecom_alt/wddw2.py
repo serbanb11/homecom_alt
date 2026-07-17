@@ -15,11 +15,13 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_INLET_TEMP,
     BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_DWH_OUTLET_TEMP,
+    BOSCHCOM_ENDPOINT_DWH_SAFETY_TEMP,
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL_MANUAL,
     BOSCHCOM_ENDPOINT_DWH_WATER_FLOW,
     BOSCHCOM_ENDPOINT_GATEWAYS,
     BOSCHCOM_ENDPOINT_HS_STARTS,
+    BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODE,
 )
 from .model import (
     BHCDeviceWddw2,
@@ -88,6 +90,66 @@ class HomeComWddw2(HomeComAlt):
             + dhw_id
             + BOSCHCOM_ENDPOINT_DWH_OPERATION_MODE,
             {"value": mode},
+            1,
+        )
+
+    async def async_get_dhw_safety_temperature(
+        self, device_id: str, dhw_id: str
+    ) -> Any:
+        """Get dhw safety temperature state."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_SAFETY_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_put_dhw_safety_temperature(
+        self, device_id: str, dhw_id: str, value: str
+    ) -> None:
+        """Set dhw safety temperature state."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_DHW_CIRCUITS
+            + "/"
+            + dhw_id
+            + BOSCHCOM_ENDPOINT_DWH_SAFETY_TEMP,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_holiday_mode(self, device_id: str) -> Any:
+        """Get system holiday mode state."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_holiday_mode(self, device_id: str, value: str) -> None:
+        """Set system holiday mode state."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODE,
+            {"value": value},
             1,
         )
 
@@ -270,17 +332,25 @@ class HomeComWddw2(HomeComAlt):
                         device_id, dhw_id
                     )
                     ref["nbStarts"] = await self.async_get_hs_starts(device_id)
+                    ref[
+                        "safetyTemperature"
+                    ] = await self.async_get_dhw_safety_temperature(device_id, dhw_id)
                     ref["tempLevel"] = {}
                     ctl = ref.get("operationMode") or {}
-                    for value in ctl.get("allowedValues", []):
-                        if value != "off":
-                            ref["tempLevel"][
-                                value
-                            ] = await self.async_get_dhw_temp_level(
-                                device_id, dhw_id, value
-                            )
+                    levels = [v for v in ctl.get("allowedValues", []) if v != "off"]
+                    # Read-only devices (e.g. Tronic TR4001) expose no
+                    # allowedValues; fall back to the known temperature levels.
+                    # Unsupported ones resolve to {} via the 404 handling.
+                    if not levels:
+                        levels = ["manual", "bath"]
+                    for value in levels:
+                        ref["tempLevel"][value] = await self.async_get_dhw_temp_level(
+                            device_id, dhw_id, value
+                        )
         else:
             dhw_circuits["references"] = {}
+
+        holiday_mode = await self.async_get_holiday_mode(device_id)
 
         return BHCDeviceWddw2(
             device=device_id,
@@ -294,4 +364,5 @@ class HomeComWddw2(HomeComAlt):
                 "electricityTotalConsumption": hs_electricity_total or {},
             },
             water_total_consumption=water_total or {},
+            holiday_mode=holiday_mode or {},
         )

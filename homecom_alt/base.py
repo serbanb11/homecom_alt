@@ -222,7 +222,8 @@ class HomeComAlt:
             del self._not_found_cache[url]
 
         headers = {
-            "Authorization": f"Bearer {self._options.token}"  # Set Bearer token
+            "Authorization": f"Bearer {self._options.token}",  # Set Bearer token
+            "Accept-Encoding": "gzip, deflate, br",
         }
         # JSON request
         if req_type == JSON:
@@ -240,6 +241,7 @@ class HomeComAlt:
                 json=data if req_type == JSON else None,
                 timeout=DEFAULT_TIMEOUT,
                 headers=headers,
+                skip_auto_headers=["Accept"],
                 allow_redirects=True,
             )
         except ClientResponseError as error:

@@ -1,6 +1,6 @@
 [project]
 name = "homecom_alt"
-version = "1.6.5"
+version = "1.7.0"
 description = "Python wrapper for controlling devices managed by HomeCom Easy APP."
 readme = "README.md"
 license = { text = "MIT" }
@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.9.4",
     "PyJWT>=2.1.0",
+    "paho-mqtt>=2.0.0",
     "tenacity",
 ]
 classifiers = [
@@ -37,16 +38,16 @@ module-root = ""
 [dependency-groups]
 dev = [
     "aioresponses==0.7.8",
-    "coverage==7.10.5",
+    "coverage==7.14.3",
     "mypy==2.1.0",
     "pre-commit==4.6.0",
     "pytest==8.4.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov>=2.12.1",
     "pytest-error-for-skips==2.0.2",
-    "pytest-timeout==2.3.1",
-    "ruff==0.15.20",
-    "syrupy==5.3.1",
+    "pytest-timeout==2.4.0",
+    "ruff==0.15.18",
+    "syrupy==5.3.4",
 ]
 
 [tool.pytest.ini_options]
