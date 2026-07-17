@@ -2,10 +2,16 @@
 
 import base64
 import json
+from typing import Any, Self
 
 import pytest
 
-from homecom_alt.bacon import async_get_bacon_devices, decode_jwt_sub, generate_client_id
+from homecom_alt.bacon import (
+    async_get_bacon_devices,
+    decode_jwt_sub,
+    generate_client_id,
+)
+from homecom_alt.exceptions import AuthFailedError
 
 
 def _make_jwt(payload: dict) -> str:
@@ -38,17 +44,17 @@ def test_generate_client_id_is_64_hex() -> None:
 
 
 class _FakeResponse:
-    def __init__(self, status: int, data) -> None:
+    def __init__(self, status: int, data: Any) -> None:
         self.status = status
         self._data = data
 
-    async def __aenter__(self) -> "_FakeResponse":
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *exc) -> bool:
+    async def __aexit__(self, *exc: object) -> bool:
         return False
 
-    async def json(self):
+    async def json(self) -> Any:
         return self._data
 
 
@@ -77,8 +83,6 @@ async def test_async_get_bacon_devices_maps_serials() -> None:
 @pytest.mark.asyncio
 async def test_async_get_bacon_devices_unauthorized() -> None:
     """A 401 raises AuthFailedError."""
-    from homecom_alt.exceptions import AuthFailedError
-
     session = _FakeSession(_FakeResponse(401, None))
     with pytest.raises(AuthFailedError):
         await async_get_bacon_devices(session, "token")

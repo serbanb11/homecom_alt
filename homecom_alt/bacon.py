@@ -8,7 +8,8 @@ an AWS-IoT-style **device shadow** exposed over MQTT 5 (WebSocket).
 
 Protocol (reverse-engineered from HomeCom Easy 4.0.0, verified live):
 
-* Broker ``wss://broker.euc1.bacon.bosch-tt-cw.com:443/mqtt`` (MQTT v5, ws subprotocol ``mqtt``).
+* Broker ``wss://broker.euc1.bacon.bosch-tt-cw.com:443/mqtt`` (MQTT v5, ws
+  subprotocol ``mqtt``).
 * ClientID must be a 64-char lowercase hex string, otherwise CONNACK is refused.
 * WebSocket upgrade headers: ``Authorization: Bearer <token>`` and a ``User-Agent``.
 * MQTT CONNECT: username = JWT ``sub`` claim, password = the raw access token.
@@ -28,6 +29,7 @@ import logging
 import os
 import ssl
 from collections.abc import Callable
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import paho.mqtt.client as mqtt
@@ -46,6 +48,9 @@ if TYPE_CHECKING:
     from aiohttp import ClientSession
 
 _LOGGER = logging.getLogger(__name__)
+
+# Minimum path segments in a shadow topic before the device serial is present.
+_SHADOW_TOPIC_MIN_PARTS = 5
 
 ShadowListener = Callable[[dict[str, Any]], None]
 
@@ -87,9 +92,9 @@ async def async_get_bacon_devices(
         "User-Agent": BACON_USER_AGENT,
     }
     async with session.get(url, headers=headers) as resp:
-        if resp.status == 401:
+        if resp.status == HTTPStatus.UNAUTHORIZED:
             raise AuthFailedError("Bacon claim request unauthorized")
-        if resp.status != 200:
+        if resp.status != HTTPStatus.OK:
             raise ApiError(f"Bacon claim request failed: {resp.status}")
         serials = await resp.json()
     if not isinstance(serials, list):
@@ -156,9 +161,7 @@ class BaconMqttClient:
         client.username_pw_set(sub, token)
         # Build the SSL context off the event loop: loading the system trust
         # store is blocking I/O (HA flags paho's tls_set() otherwise).
-        ssl_context = await self._loop.run_in_executor(
-            None, ssl.create_default_context
-        )
+        ssl_context = await self._loop.run_in_executor(None, ssl.create_default_context)
         client.tls_set_context(ssl_context)
         client.on_connect = self._on_connect
         client.on_message = self._on_message
@@ -181,7 +184,7 @@ class BaconMqttClient:
 
         try:
             await asyncio.wait_for(self._connected.wait(), timeout=15)
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             await self.async_disconnect()
             if self._connect_rc not in (0, None):
                 raise AuthFailedError(
@@ -202,14 +205,18 @@ class BaconMqttClient:
                 client.loop_stop()
                 client.disconnect()
             except Exception:  # noqa: BLE001 - best-effort teardown
-                pass
+                _LOGGER.debug("Ignoring bacon MQTT teardown error", exc_info=True)
 
         if self._loop is not None:
             await self._loop.run_in_executor(None, _stop)
         else:
             _stop()
 
-    async def async_get_state(self, serial: str, timeout: float = 10.0) -> dict[str, Any]:
+    async def async_get_state(
+        self,
+        serial: str,
+        timeout: float = 10.0,  # noqa: ASYNC109 - public API mirrors other device reads
+    ) -> dict[str, Any]:
         """Request the current shadow for ``serial`` and await the reply.
 
         Returns ``{"reported": {...}, "desired": {...}}``.
@@ -222,7 +229,7 @@ class BaconMqttClient:
         self._client.publish(self._shadow_topic(serial, "get"), "")
         try:
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             self._get_futures.pop(serial, None)
             raise ApiError(f"Timed out reading shadow for {serial}") from err
 
@@ -238,7 +245,14 @@ class BaconMqttClient:
 
     # -- paho callbacks (run on paho's network thread) --------------------------
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties=None) -> None:  # noqa: ANN001, D401
+    def _on_connect(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        flags: Any,
+        reason_code: Any,
+        properties: Any = None,
+    ) -> None:
         rc = getattr(reason_code, "value", reason_code)
         self._connect_rc = reason_code
         if str(reason_code) not in ("Success", "0") and rc != 0:
@@ -250,16 +264,25 @@ class BaconMqttClient:
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._connected.set)
 
-    def _on_disconnect(self, client, userdata, flags, reason_code, properties=None) -> None:  # noqa: ANN001
+    def _on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        flags: Any,
+        reason_code: Any,
+        properties: Any = None,
+    ) -> None:
         _LOGGER.debug("Bacon MQTT disconnected: %s", reason_code)
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._connected.clear)
 
-    def _on_message(self, client, userdata, msg) -> None:  # noqa: ANN001
+    def _on_message(
+        self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
+    ) -> None:
         topic = msg.topic
         parts = topic.split("/")
         # users/{sub}/devices/{serial}/shadows/state/{action}[/accepted|/rejected]
-        if len(parts) < 5 or parts[2] != "devices":
+        if len(parts) < _SHADOW_TOPIC_MIN_PARTS or parts[2] != "devices":
             return
         serial = parts[3]
         try:
