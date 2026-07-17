@@ -23,6 +23,23 @@ pip install homecom_alt
 | `wddw2` | `HomeComWddw2` | `BHCDeviceWddw2` |
 | `commodule` | `HomeComCommodule` | `BHCDeviceCommodule` |
 | `generic` | `HomeComGeneric` | `BHCDeviceGeneric` |
+| `bacon_rac` | `HomeComBaconRac` | `BHCDeviceBaconRac` |
+
+### Matter-commissioned ACs (Bacon)
+
+Bosch Climate ACs commissioned **over Matter** in the HomeCom Easy app (serials
+like `86DM-580-…`) are not pointt gateways, so they never appear in
+`HomeComAlt.async_get_devices()`. They are managed by Bosch's *bacon* backend and
+controlled through an AWS-IoT-style **device shadow over MQTT 5 (WebSocket)**,
+which requires the extra `paho-mqtt` dependency (installed automatically).
+
+- Discover them with `async_get_bacon_devices(session, token, region)` — returns
+  the same `{"deviceId", "deviceType": "bacon_rac"}` shape as the REST discovery.
+- Open one shared `BaconMqttClient` per account (`async_connect(token, sub)`),
+  then wrap each serial in a `HomeComBaconRac` for `async_update()` and the
+  `async_set_power` / `async_set_mode` / `async_set_temperature` / `async_set_fan`
+  / `async_set_swing` controls.
+- The region defaults to `euc1` (eu-central-1); `use1` also exists.
 
 ## Authentication
 

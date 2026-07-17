@@ -42,6 +42,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_HC_CONTROL,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
+    BOSCHCOM_ENDPOINT_HC_COOLING_OPERATION_MODE,
     BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
@@ -382,6 +383,41 @@ class HomeComK40(HomeComAlt):
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
             {"value": temp},
+            1,
+        )
+
+    async def async_get_hc_cooling_operation_mode(
+        self, device_id: str, hc_id: str
+    ) -> Any:
+        """Get hc cooling operation mode."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_COOLING_OPERATION_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_hc_cooling_operation_mode(
+        self, device_id: str, hc_id: str, mode: str
+    ) -> None:
+        """Set hc cooling operation mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_COOLING_OPERATION_MODE,
+            {"value": mode},
             1,
         )
 
@@ -2194,6 +2230,7 @@ class HomeComK40(HomeComAlt):
                     prefix + BOSCHCOM_ENDPOINT_HC_MANUAL_ROOM_SETPOINT,
                     prefix + BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
                     prefix + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
+                    prefix + BOSCHCOM_ENDPOINT_HC_COOLING_OPERATION_MODE,
                     prefix + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY,
                     prefix + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY,
                     prefix + BOSCHCOM_ENDPOINT_HC_HEAT_CURVE_MAX,
@@ -2226,6 +2263,9 @@ class HomeComK40(HomeComAlt):
                 )
                 ref["coolingRoomTempSetpoint"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT
+                )
+                ref["coolingOperationMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_COOLING_OPERATION_MODE
                 )
                 ref["maxSupply"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY)
                 ref["minSupply"] = hc_bulk.get(prefix + BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY)
