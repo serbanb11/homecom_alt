@@ -336,3 +336,15 @@ MAX_CONCURRENT: Final[int] = 3
 
 # Maximum number of resource paths per bulk API request
 MAX_BULK_ENDPOINTS: Final[int] = 30
+
+# --- Bacon (Matter-commissioned) backend: MQTT device-shadow ----------------
+BACON_RAC_TYPE: Final[str] = "bacon_rac"
+BACON_MQTT_PORT: Final[int] = 443
+BACON_WS_PATH: Final[str] = "/mqtt"
+BACON_USER_AGENT: Final[str] = "DashApp/4.0.0 (Android-Release)"
+# The bacon backend is region-scoped. The HomeCom Easy 4.0.0 app hardcodes
+# eu-central-1 ("euc1"); a US region ("use1") also exists. Exposed as a default
+# so another region only needs a different value (no code change).
+BACON_DEFAULT_REGION: Final[str] = "euc1"
+BACON_KNOWN_REGIONS: Final[tuple[str, ...]] = ("euc1", "use1")
+BACON_HOST_TEMPLATE: Final[str] = "{service}.{region}.bacon.bosch-tt-cw.com"

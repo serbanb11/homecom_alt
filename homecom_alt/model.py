@@ -130,3 +130,17 @@ class BHCDeviceCommodule:
     charge_points: list | None
     eth0_state: dict | None
     wifi_state: dict | None
+
+
+@dataclass(frozen=True)
+class BHCDeviceBaconRac:
+    """Data class for a Matter/Bacon-commissioned RAC (AC) device.
+
+    ``reported``/``desired`` are the raw shadow state maps
+    (``powerEnabled``, ``opMode``, ``fanSpeed``, ``tempSetpoint`` …).
+    """
+
+    device: dict | None
+    firmware: list | None
+    reported: dict | None
+    desired: dict | None
