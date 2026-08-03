@@ -1771,6 +1771,127 @@ async def test_k40_get_consumption_no_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_k40_pool_getters_and_setters() -> None:
+    """Test K40 swimming pool get and put methods."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 29.9})),
+    ):
+        assert await k40.async_get_pool_current_temp(DEVICE_ID) == {"value": 29.9}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": 29.0})),
+    ):
+        assert await k40.async_get_pool_setpoint_temp(DEVICE_ID) == {"value": 29.0}
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_put_pool_setpoint_temp(DEVICE_ID, 30.5)
+        assert mock_req.call_args[0][2] == {"value": 30.5}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "on"})),
+    ):
+        assert await k40.async_get_pool_enabled(DEVICE_ID) == {"value": "on"}
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_put_pool_enabled(DEVICE_ID, "off")
+        assert mock_req.call_args[0][2] == {"value": "off"}
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "withHeating"})),
+    ):
+        assert await k40.async_get_pool_additional_heater_mode(DEVICE_ID) == {
+            "value": "withHeating"
+        }
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_put_pool_additional_heater_mode(DEVICE_ID, "always")
+        assert mock_req.call_args[0][2] == {"value": "always"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_with_pool() -> None:
+    """K40 update populates the pool namespace and its energy when present."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202, PLR0911
+                if "recordings" in path and "pool" in path:
+                    # one real hour + filler for the not-yet-started hours
+                    return [{"c": 3, "y": 4.5}, {"c": 0, "y": 1}]
+                if "recordings" in path:
+                    return []
+                if path.endswith("/pool/currentTemp"):
+                    return {"value": 29.9}
+                if path.endswith("/pool/setpointTemp"):
+                    return {"value": 29.0}
+                if path.endswith("/pool/enabled"):
+                    return {"value": "on"}
+                if "pool/additionalHeater" in path:
+                    return {"value": "withHeating"}
+                if path.endswith("/dhwCircuits"):
+                    return {"references": []}
+                if path.endswith("/heatingCircuits"):
+                    return {"references": []}
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
+        if "energy/historyEntries" in url:
+            return _mock_json_response({"value": 1})
+        if "energy/history" in url:
+            return _mock_json_response({"value": []})
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.pool is not None
+    assert result.pool["currentTemp"] == {"value": 29.9}
+    assert result.pool["setpointTemp"] == {"value": 29.0}
+    assert result.pool["enabled"] == {"value": "on"}
+    assert result.pool["additionalHeaterMode"] == {"value": "withHeating"}
+    assert result.pool["dayconsumption"] == [{"c": 3, "y": 4.5}, {"c": 0, "y": 1}]
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_without_pool() -> None:
+    """K40 update leaves pool as None on devices without a pool circuit."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            return _k40_bulk_route(url, args, kwargs)
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.pool is None
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_k40_ventilation_setters() -> None:
     """Test ventilation setter methods."""
     session = ClientSession()

@@ -79,6 +79,10 @@ from .const import (
     BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
+    BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER,
+    BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
+    BOSCHCOM_ENDPOINT_POOL_ENABLED,
+    BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_SILENT_MODE,
     BOSCHCOM_ENDPOINT_VENTILATION,
@@ -695,6 +699,95 @@ class HomeComK40(HomeComAlt):
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_SILENT_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_pool_current_temp(self, device_id: str) -> Any:
+        """Get swimming pool current (measured) temperature."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_get_pool_setpoint_temp(self, device_id: str) -> Any:
+        """Get swimming pool target temperature setpoint."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
+        )
+        return await self._to_data(response)
+
+    async def async_put_pool_setpoint_temp(self, device_id: str, value: float) -> None:
+        """Set swimming pool target temperature setpoint (C)."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_pool_enabled(self, device_id: str) -> Any:
+        """Get swimming pool enabled state (off/on)."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_ENABLED,
+        )
+        return await self._to_data(response)
+
+    async def async_put_pool_enabled(self, device_id: str, value: str) -> None:
+        """Set swimming pool enabled state (off/on)."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_ENABLED,
+            {"value": value},
+            1,
+        )
+
+    async def async_get_pool_additional_heater_mode(self, device_id: str) -> Any:
+        """Get swimming pool additional-heater mode (never/withHeating/always)."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER,
+        )
+        return await self._to_data(response)
+
+    async def async_put_pool_additional_heater_mode(
+        self, device_id: str, mode: str
+    ) -> None:
+        """Set swimming pool additional-heater mode (never/withHeating/always)."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER,
             {"value": mode},
             1,
         )
@@ -2067,6 +2160,11 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
             BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
             BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
+            # Swimming pool (absent on non-pool devices; 404 -> None, tolerated)
+            BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
+            BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
+            BOSCHCOM_ENDPOINT_POOL_ENABLED,
+            BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER,
         ]
         bulk_response = await self.async_request_bulk(device_id, bulk_endpoints) or {}
 
@@ -2143,6 +2241,49 @@ class HomeComK40(HomeComAlt):
                 self.async_get_consumption(device_id, "total", today.strftime("%Y"))
             ),
         )
+
+        # Swimming pool: only present on devices with a pool circuit. When the
+        # /resource/pool/* reads all 404 (-> None) there is no pool, and we skip
+        # the extra recordings calls entirely.
+        pool: dict[str, Any] | None = None
+        if any(
+            bulk_response.get(endpoint)
+            for endpoint in (
+                BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
+                BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
+                BOSCHCOM_ENDPOINT_POOL_ENABLED,
+            )
+        ):
+            pool = {
+                "currentTemp": bulk_response.get(BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP)
+                or {},
+                "setpointTemp": bulk_response.get(BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP)
+                or {},
+                "enabled": bulk_response.get(BOSCHCOM_ENDPOINT_POOL_ENABLED) or {},
+                "additionalHeaterMode": bulk_response.get(
+                    BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER
+                )
+                or {},
+            }
+            (
+                pool["dayconsumption"],
+                pool["monthconsumption"],
+                pool["yearconsumption"],
+            ) = await asyncio.gather(
+                limited_call(
+                    self.async_get_consumption(
+                        device_id, "pool", today.strftime("%Y-%m-%d")
+                    )
+                ),
+                limited_call(
+                    self.async_get_consumption(
+                        device_id, "pool", today.strftime("%Y-%m")
+                    )
+                ),
+                limited_call(
+                    self.async_get_consumption(device_id, "pool", today.strftime("%Y"))
+                ),
+            )
 
         dhw_circuits = dhw_circuits or {}
         dhw_refs = dhw_circuits.get("references", [])
@@ -2482,4 +2623,5 @@ class HomeComK40(HomeComAlt):
             energy_gas_unit=energy_gas_unit,
             indoor_humidity=indoor_humidity,
             devices=device_refs,
+            pool=pool,
         )

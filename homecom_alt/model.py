@@ -58,6 +58,7 @@ class BHCDeviceK40:
     indoor_humidity: list | None
     devices: list | None
     energy_gas_unit: dict | None = None
+    pool: dict | None = None
 
 
 @dataclass(frozen=True)

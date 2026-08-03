@@ -127,6 +127,14 @@ BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
 BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER: Final[str] = (
     "/resource/heatSources/additionalHeater/operationMode"
 )
+# Swimming pool circuit. /resource/pool itself returns {} (not a refEnum), so
+# these are fixed absolute paths rather than a discoverable circuit collection.
+BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP: Final[str] = "/resource/pool/currentTemp"
+BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP: Final[str] = "/resource/pool/setpointTemp"
+BOSCHCOM_ENDPOINT_POOL_ENABLED: Final[str] = "/resource/pool/enabled"
+BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER: Final[str] = (
+    "/resource/pool/additionalHeater/poolMode"
+)
 BOSCHCOM_ENDPOINT_HEATING_CIRCUITS: Final[str] = "/resource/heatingCircuits"
 BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE: Final[str] = "/controlType"
 BOSCHCOM_ENDPOINT_HC_SUWI_MODE: Final[str] = "/currentSuWiMode"
