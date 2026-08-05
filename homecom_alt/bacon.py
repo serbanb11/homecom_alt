@@ -16,6 +16,20 @@ Protocol (reverse-engineered from HomeCom Easy 4.0.0, verified live):
 * State read: publish empty to ``users/{sub}/devices/{serial}/shadows/state/get`` and
   read the reply on ``.../get/accepted``.
 * Control: publish ``{"state": {"desired": {...}}}`` to ``.../shadows/state/update``.
+
+Three channels live under ``users/{sub}/devices/{serial}/``, and only the first is
+request/response:
+
+* ``shadows/{state,schedule}/…`` — the shadow above. Not retained: nothing arrives
+  until a ``get`` is published or the device reports a change.
+* ``topics/{sensor,meta,info}`` — **push only**. No request verb exists anywhere in
+  the app, so these cannot be polled; the device publishes on its own cadence
+  (``dataLakeBasePublishInterval``, 1800 s in the wild). ``sensor`` is the only
+  source of live readings such as ``roomTemperature`` — it is *not* in the shadow.
+* ``commands/{export,force_schedule,reset_matter}`` — outbound actions.
+
+The single ``users/{sub}/#`` subscription already covers all three, so every
+payload is cached as it arrives (see :meth:`BaconMqttClient.raw_snapshot`).
 """
 
 from __future__ import annotations
@@ -29,9 +43,10 @@ import logging
 import os
 import ssl
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import paho.mqtt.client as mqtt
 
@@ -50,8 +65,25 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Minimum path segments in a shadow topic before the device serial is present.
-_SHADOW_TOPIC_MIN_PARTS = 5
+# users/{sub}/devices/{serial}/{channel}/{rest…} — index of each field.
+_TOPIC_USERS = 0
+_TOPIC_SUB = 1
+_TOPIC_SCOPE = 2
+_TOPIC_SERIAL = 3
+_TOPIC_CHANNEL = 4
+_TOPIC_MIN_PARTS = 5
+# users/{sub}/{channel}[/…] — the shortest topic still worth dispatching on.
+_ACCOUNT_TOPIC_MIN_PARTS = 3
+
+# Push-only channel: the subtopics whose latest payload is worth keeping.
+_TOPICS_CHANNEL = "topics"
+_TOPIC_SENSOR = "sensor"
+_TOPIC_META = "meta"
+_TOPIC_INFO = "info"
+
+# Cap a single cached payload. ``schedules`` arrives gzip+base64 and a handful of
+# devices would otherwise dominate a diagnostics dump.
+_MAX_CACHED_PAYLOAD_CHARS = 20_000
 
 _CREDENTIAL_REASON_CODES = frozenset({4, 5, 134, 135})
 _CREDENTIAL_REASON_NAMES = frozenset(
@@ -59,6 +91,54 @@ _CREDENTIAL_REASON_NAMES = frozenset(
 )
 
 ShadowListener = Callable[[dict[str, Any]], None]
+
+#: ``(serial, channel_path, payload)`` for every message seen on the wildcard.
+#: ``serial`` is ``None`` for account-level topics such as ``users/{sub}/commands/x``.
+RawListener = Callable[[str | None, str, Any], None]
+
+
+class ParsedTopic(NamedTuple):
+    """A bacon topic split into the parts callers actually dispatch on."""
+
+    serial: str | None
+    """Device serial, or ``None`` for an account-level topic."""
+
+    channel: str
+    """``shadows``, ``topics``, ``commands`` — or ``""`` if unrecognised."""
+
+    path: str
+    """Everything after the channel, e.g. ``state/get/accepted`` or ``sensor``."""
+
+    @property
+    def channel_path(self) -> str:
+        """``channel/path``, the key a message is cached and dispatched under.
+
+        Includes the channel so ``topics/sensor`` can never collide with a
+        same-named subtopic of ``shadows`` or ``commands``.
+        """
+        return f"{self.channel}/{self.path}" if self.path else self.channel
+
+
+def parse_topic(topic: str) -> ParsedTopic | None:
+    """Split a bacon MQTT topic, or return ``None`` if it is not one.
+
+    Handles both the device form ``users/{sub}/devices/{serial}/{channel}/{rest}``
+    and the account form ``users/{sub}/{channel}/{rest}`` (used by
+    ``users/{sub}/commands/{command}``), so a subscription to ``users/{sub}/#``
+    can be demultiplexed without raising on the shorter shape.
+    """
+    parts = topic.split("/")
+    if len(parts) < _ACCOUNT_TOPIC_MIN_PARTS or parts[_TOPIC_USERS] != "users":
+        return None
+    is_device = len(parts) >= _TOPIC_MIN_PARTS and parts[_TOPIC_SCOPE] == "devices"
+    if is_device:
+        return ParsedTopic(
+            parts[_TOPIC_SERIAL],
+            parts[_TOPIC_CHANNEL],
+            "/".join(parts[_TOPIC_CHANNEL + 1 :]),
+        )
+    # Account-level: users/{sub}/{channel}/{rest…}
+    return ParsedTopic(None, parts[_TOPIC_SCOPE], "/".join(parts[_TOPIC_SCOPE + 1 :]))
 
 
 def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
@@ -189,6 +269,11 @@ class BaconMqttClient:
         self._connect_rc: Any = None
         self._get_futures: dict[str, asyncio.Future] = {}
         self._listeners: dict[str, list[ShadowListener]] = {}
+        self._raw_listeners: list[RawListener] = []
+        # (serial, channel_path) -> {"payload": ..., "received_at": ...}. One
+        # entry per key: only the newest payload of each topic is of interest,
+        # and for a push-only channel its age matters as much as its content.
+        self._raw: dict[tuple[str | None, str], dict[str, Any]] = {}
 
     @property
     def client_id(self) -> str:
@@ -214,6 +299,94 @@ class BaconMqttClient:
     def register_listener(self, serial: str, callback: ShadowListener) -> None:
         """Register a callback invoked (on the asyncio loop) on shadow updates."""
         self._listeners.setdefault(serial, []).append(callback)
+
+    def register_raw_listener(self, callback: RawListener) -> None:
+        """Register a callback invoked (on the asyncio loop) for *every* message.
+
+        Called as ``callback(serial, channel_path, payload)``. Intended for
+        diagnostics and for capturing channels this library does not model yet;
+        :meth:`register_listener` remains the way to follow a device's shadow.
+        """
+        self._raw_listeners.append(callback)
+
+    def remove_raw_listener(self, callback: RawListener) -> None:
+        """Unregister a raw listener. Silent if it was never registered.
+
+        Lets a caller capture over a bounded window without leaking a callback
+        when the window ends — or when it ends by being cancelled.
+        """
+        with suppress(ValueError):
+            self._raw_listeners.remove(callback)
+
+    def raw_snapshot(self) -> dict[str, dict[str, Any]]:
+        """Return every cached payload, keyed ``"{serial}/{channel_path}"``.
+
+        JSON-serialisable, for a diagnostics dump. Each value is
+        ``{"payload": ..., "received_at": <ISO 8601>}``. Account-level topics use
+        ``"-"`` in place of a serial.
+
+        The caller is responsible for redaction: the ``users/{sub}/#``
+        subscription also carries other devices on the account and the
+        sharing/claim traffic, and ``topics/info`` includes Matter onboarding
+        secrets.
+        """
+        return {
+            f"{serial or '-'}/{path}": {
+                "payload": entry["payload"],
+                "received_at": entry["received_at"].isoformat(),
+            }
+            for (serial, path), entry in sorted(
+                self._raw.items(), key=lambda item: (item[0][0] or "", item[0][1])
+            )
+        }
+
+    def get_topic(self, serial: str, subtopic: str) -> Any | None:
+        """Return the last payload cached for ``topics/{subtopic}`` of ``serial``.
+
+        A pure cache read. ``topics/*`` is **push only** — there is no request
+        verb for it anywhere in the protocol — so this returns ``None`` until the
+        device has published, and must never be turned into a publish.
+        """
+        entry = self._raw.get((serial, f"{_TOPICS_CHANNEL}/{subtopic}"))
+        return entry["payload"] if entry else None
+
+    def get_sensor(self, serial: str) -> dict[str, Any] | None:
+        """Return the newest ``topics/sensor`` reading for ``serial``.
+
+        The payload is ``{"deviceType": …, "items": [ … ]}``; the last item is
+        returned, which for a RAC carries ``roomTemperature`` — the live room
+        temperature that is absent from the shadow. ``None`` if nothing has been
+        published yet (expect up to ``dataLakeBasePublishInterval`` of silence,
+        and nothing at all straight after a reconnect).
+        """
+        payload = self.get_topic(serial, _TOPIC_SENSOR)
+        if not isinstance(payload, dict):
+            return None
+        items = payload.get("items")
+        if not isinstance(items, list) or not items:
+            return None
+        latest = items[-1]
+        return latest if isinstance(latest, dict) else None
+
+    def get_metadata(self, serial: str) -> dict[str, Any] | None:
+        """Return the newest ``topics/meta`` payload for ``serial``.
+
+        Typed capability metadata: string fields carry ``{"enum": [...]}``, float
+        fields ``{"min": …, "max": …, "unit": …}``, all of them ``"ro"``. Lets a
+        caller derive a device's real modes and bounds instead of hardcoding them.
+        """
+        payload = self.get_topic(serial, _TOPIC_META)
+        return payload if isinstance(payload, dict) else None
+
+    def get_info(self, serial: str) -> dict[str, Any] | None:
+        """Return the newest ``topics/info`` payload for ``serial``.
+
+        Identity and health: ``online``, ``firmwareVersion``, ``hardwareVersion``,
+        ``signalStrength``, ``displayCode``, ``errorClass`` — plus Matter
+        commissioning fields, which are secrets and must not be logged.
+        """
+        payload = self.get_topic(serial, _TOPIC_INFO)
+        return payload if isinstance(payload, dict) else None
 
     async def async_connect(self, token: str, sub: str) -> None:
         """(Re)connect to the broker with a fresh token. Idempotent.
@@ -384,16 +557,24 @@ class BaconMqttClient:
         self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
     ) -> None:
         topic = msg.topic
-        parts = topic.split("/")
-        # users/{sub}/devices/{serial}/shadows/state/{action}[/accepted|/rejected]
-        if len(parts) < _SHADOW_TOPIC_MIN_PARTS or parts[2] != "devices":
+        parsed = parse_topic(topic)
+        if parsed is None:
             return
-        serial = parts[3]
         try:
             payload = json.loads(msg.payload.decode()) if msg.payload else {}
         except (ValueError, UnicodeDecodeError):
-            return
+            # Keep the undecodable body: knowing a topic fired, and roughly what
+            # it carried, is worth more than dropping it silently.
+            payload = self._undecodable_payload(msg.payload)
 
+        self._cache_raw(parsed, payload)
+        self._notify_raw(parsed, payload)
+
+        if parsed.channel == "shadows" and parsed.serial is not None:
+            self._handle_shadow(parsed.serial, topic, payload)
+
+    def _handle_shadow(self, serial: str, topic: str, payload: Any) -> None:
+        """Resolve a pending get and fan a shadow change out to its listeners."""
         if topic.endswith("/get/rejected"):
             self._resolve_get(serial, exc=ApiError(f"Shadow get rejected for {serial}"))
             return
@@ -415,6 +596,43 @@ class BaconMqttClient:
         for callback in self._listeners.get(serial, []):
             if self._loop is not None:
                 self._loop.call_soon_threadsafe(callback, result)
+
+    @staticmethod
+    def _undecodable_payload(raw: bytes) -> dict[str, str]:
+        """Describe a body that is not JSON, without letting it grow unbounded."""
+        text = raw.decode(errors="replace")[:_MAX_CACHED_PAYLOAD_CHARS]
+        return {"__raw__": text}
+
+    def _cache_raw(self, parsed: ParsedTopic, payload: Any) -> None:
+        """Keep the newest payload per topic, size-capped."""
+        self._raw[parsed.serial, parsed.channel_path] = {
+            "payload": self._cap(payload),
+            "received_at": datetime.now(UTC),
+        }
+
+    @classmethod
+    def _cap(cls, payload: Any) -> Any:
+        """Replace an oversized payload with a marker of its size.
+
+        ``schedules`` is gzip+base64 and a few devices would otherwise dominate a
+        diagnostics dump.
+        """
+        if isinstance(payload, str) and len(payload) > _MAX_CACHED_PAYLOAD_CHARS:
+            return {"__truncated__": len(payload)}
+        if isinstance(payload, dict):
+            return {key: cls._cap(value) for key, value in payload.items()}
+        if isinstance(payload, list):
+            return [cls._cap(item) for item in payload]
+        return payload
+
+    def _notify_raw(self, parsed: ParsedTopic, payload: Any) -> None:
+        """Hand every message to the raw listeners, on the asyncio loop."""
+        if self._loop is None:
+            return
+        for callback in self._raw_listeners:
+            self._loop.call_soon_threadsafe(
+                callback, parsed.serial, parsed.channel_path, payload
+            )
 
     def _resolve_get(
         self, serial: str, result: dict | None = None, exc: Exception | None = None
@@ -440,6 +658,24 @@ class HomeComBaconRac:
     async def async_update(self) -> dict[str, Any]:
         """Return the current shadow (``{"reported": ..., "desired": ...}``)."""
         return await self._client.async_get_state(self.device_id)
+
+    @property
+    def sensor(self) -> dict[str, Any] | None:
+        """Latest ``topics/sensor`` reading, e.g. ``{"roomTemperature": 24.5}``.
+
+        ``None`` until the device pushes one — this channel cannot be polled.
+        """
+        return self._client.get_sensor(self.device_id)
+
+    @property
+    def metadata(self) -> dict[str, Any] | None:
+        """Latest ``topics/meta`` payload (capability metadata), if seen."""
+        return self._client.get_metadata(self.device_id)
+
+    @property
+    def info(self) -> dict[str, Any] | None:
+        """Latest ``topics/info`` payload (identity and health), if seen."""
+        return self._client.get_info(self.device_id)
 
     async def async_set_power(self, on: bool, mode: str | None = None) -> None:
         """Turn the unit on/off, optionally also setting the operating mode."""

@@ -5,10 +5,12 @@ from __future__ import annotations
 from .bacon import (
     BaconMqttClient,
     HomeComBaconRac,
+    ParsedTopic,
     async_get_bacon_devices,
     decode_jwt_exp,
     decode_jwt_sub,
     generate_client_id,
+    parse_topic,
 )
 from .base import HomeComAlt
 from .commodule import HomeComCommodule
@@ -64,8 +66,10 @@ __all__ = [
     "InvalidSensorDataError",
     "MqttNotAuthorizedError",
     "NotRespondingError",
+    "ParsedTopic",
     "async_get_bacon_devices",
     "decode_jwt_exp",
     "decode_jwt_sub",
     "generate_client_id",
+    "parse_topic",
 ]

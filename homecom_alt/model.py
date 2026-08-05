@@ -139,9 +139,20 @@ class BHCDeviceBaconRac:
 
     ``reported``/``desired`` are the raw shadow state maps
     (``powerEnabled``, ``opMode``, ``fanSpeed``, ``tempSetpoint`` …).
+
+    ``sensor``/``metadata``/``info`` come from the push-only ``topics`` channel,
+    not from the shadow, and are ``None`` until the device has published each one:
+
+    * ``sensor`` — live readings, notably ``roomTemperature``, which the shadow
+      does not carry at all.
+    * ``metadata`` — typed capability metadata (allowed modes, setpoint bounds).
+    * ``info`` — identity and health (``online``, firmware, signal strength).
     """
 
     device: dict | None
     firmware: list | None
     reported: dict | None
     desired: dict | None
+    sensor: dict | None = None
+    metadata: dict | None = None
+    info: dict | None = None

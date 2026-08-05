@@ -15,6 +15,7 @@ from homecom_alt.bacon import (
     decode_jwt_exp,
     decode_jwt_sub,
     generate_client_id,
+    parse_topic,
 )
 from homecom_alt.exceptions import (
     ApiError,
@@ -141,6 +142,7 @@ class _FakeMqttClient:
         self.credentials: tuple | None = None
         self.headers: dict | None = None
         self.subscriptions: list[str] = []
+        self.published: list[tuple[str, Any]] = []
         self.loop_stopped = False
         _FakeMqttClient.last = self
 
@@ -171,6 +173,9 @@ class _FakeMqttClient:
 
     def subscribe(self, topic: str) -> None:
         self.subscriptions.append(topic)
+
+    def publish(self, topic: str, payload: Any = None) -> None:
+        self.published.append((topic, payload))
 
 
 def _install_fake_mqtt(
@@ -259,3 +264,283 @@ async def test_async_connect_other_refusal_is_plain_api_error(
 def test_token_expires_at_without_session() -> None:
     """No connect attempt yet → no known expiry."""
     assert BaconMqttClient("a" * 64).token_expires_at is None
+
+
+# ---------------------------------------------------------------------------
+# parse_topic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("topic", "expected"),
+    [
+        (
+            "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+            ("86DM-1", "shadows", "state/get/accepted"),
+        ),
+        (
+            "users/sub-1/devices/86DM-1/topics/sensor",
+            ("86DM-1", "topics", "sensor"),
+        ),
+        (
+            "users/sub-1/devices/86DM-1/commands/export",
+            ("86DM-1", "commands", "export"),
+        ),
+        # Account-level: no devices/ segment, so no serial.
+        ("users/sub-1/commands/export", (None, "commands", "export")),
+    ],
+)
+def test_parse_topic_forms(topic: str, expected: tuple) -> None:
+    """Both the device and the account topic shapes are split correctly."""
+    assert tuple(parse_topic(topic)) == expected  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "topic", ["", "users", "users/sub-1", "nope/sub-1/devices/x/y"]
+)
+def test_parse_topic_rejects_foreign_topics(topic: str) -> None:
+    """Anything that is not a bacon topic is rejected rather than raising."""
+    assert parse_topic(topic) is None
+
+
+# ---------------------------------------------------------------------------
+# topics/* capture — the channel that carries roomTemperature
+# ---------------------------------------------------------------------------
+
+
+class _FakeMessage:
+    """Stand-in for paho's MQTTMessage."""
+
+    def __init__(self, topic: str, payload: Any) -> None:
+        self.topic = topic
+        self.payload = (
+            payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+        )
+
+
+async def _connected_client(monkeypatch: pytest.MonkeyPatch) -> BaconMqttClient:
+    """Return a client with a live fake session, ready to receive messages."""
+    _install_fake_mqtt(monkeypatch, _FakeReasonCode(0, "Success"))
+    client = BaconMqttClient("a" * 64)
+    await client.async_connect(_make_jwt({"sub": "sub-1"}), "sub-1")
+    return client
+
+
+def _deliver(client: BaconMqttClient, topic: str, payload: Any) -> None:
+    """Feed a message in the way paho's network thread would."""
+    client._on_message(None, None, _FakeMessage(topic, payload))
+
+
+@pytest.mark.asyncio
+async def test_sensor_topic_is_captured_not_discarded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RoomTemperature arrives on topics/sensor and must survive the demux.
+
+    This is the whole point of the change: the payload was previously dropped
+    because it is not a shadow reply, which is why current_temperature was
+    unobtainable.
+    """
+    client = await _connected_client(monkeypatch)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/topics/sensor",
+        {"deviceType": "rac", "items": [{"timestamp": 1, "roomTemperature": 24.5}]},
+    )
+
+    assert client.get_sensor("86DM-1") == {"timestamp": 1, "roomTemperature": 24.5}
+
+
+@pytest.mark.asyncio
+async def test_sensor_returns_latest_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The newest item of the batch wins."""
+    client = await _connected_client(monkeypatch)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/topics/sensor",
+        {"items": [{"roomTemperature": 20.0}, {"roomTemperature": 22.5}]},
+    )
+
+    assert client.get_sensor("86DM-1") == {"roomTemperature": 22.5}
+
+
+@pytest.mark.asyncio
+async def test_meta_and_info_topics_are_captured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Meta and info are cached alongside sensor."""
+    client = await _connected_client(monkeypatch)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/topics/meta",
+        {"operationMode": {"enum": ["cool", "heat"], "ro": False}},
+    )
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/topics/info",
+        {"online": True, "firmwareVersion": "1.2.3"},
+    )
+
+    assert client.get_metadata("86DM-1") == {
+        "operationMode": {"enum": ["cool", "heat"], "ro": False}
+    }
+    assert client.get_info("86DM-1") == {"online": True, "firmwareVersion": "1.2.3"}
+
+
+@pytest.mark.asyncio
+async def test_accessors_are_none_before_any_publish(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """topics/* cannot be polled, so nothing is known until the device pushes."""
+    client = await _connected_client(monkeypatch)
+
+    assert client.get_sensor("86DM-1") is None
+    assert client.get_metadata("86DM-1") is None
+    assert client.get_info("86DM-1") is None
+
+
+@pytest.mark.asyncio
+async def test_malformed_sensor_payloads_do_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent/odd shapes yield None rather than an exception."""
+    client = await _connected_client(monkeypatch)
+    topic = "users/sub-1/devices/86DM-1/topics/sensor"
+
+    for payload in ({"items": []}, {"items": "nope"}, {"no_items": 1}, [1, 2]):
+        _deliver(client, topic, payload)
+        assert client.get_sensor("86DM-1") is None
+
+
+@pytest.mark.asyncio
+async def test_raw_snapshot_records_topic_and_arrival_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every channel lands in the snapshot with an ISO timestamp."""
+    client = await _connected_client(monkeypatch)
+
+    _deliver(client, "users/sub-1/devices/86DM-1/topics/sensor", {"items": []})
+    _deliver(client, "users/sub-1/commands/export", {"ok": True})
+
+    snapshot = client.raw_snapshot()
+    assert "86DM-1/topics/sensor" in snapshot
+    # Account-level topics have no serial.
+    assert "-/commands/export" in snapshot
+    datetime.fromisoformat(snapshot["86DM-1/topics/sensor"]["received_at"])
+
+
+@pytest.mark.asyncio
+async def test_raw_snapshot_caps_oversized_payloads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A gzip+base64 blob is replaced by its size, not stored whole."""
+    client = await _connected_client(monkeypatch)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/update/documents",
+        {"schedules": "x" * 50_000},
+    )
+
+    stored = client.raw_snapshot()["86DM-1/shadows/state/update/documents"]["payload"]
+    assert stored["schedules"] == {"__truncated__": 50_000}
+
+
+@pytest.mark.asyncio
+async def test_undecodable_payload_is_kept_as_raw(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-JSON body is still recorded so the topic is not silently lost."""
+    client = await _connected_client(monkeypatch)
+
+    _deliver(client, "users/sub-1/devices/86DM-1/topics/sensor", b"\xff not json")
+
+    payload = client.raw_snapshot()["86DM-1/topics/sensor"]["payload"]
+    assert "__raw__" in payload
+
+
+@pytest.mark.asyncio
+async def test_raw_listener_sees_every_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """register_raw_listener fires for shadow and topics alike."""
+    client = await _connected_client(monkeypatch)
+    seen: list[tuple] = []
+    client.register_raw_listener(lambda s, p, _payload: seen.append((s, p)))
+
+    _deliver(client, "users/sub-1/devices/86DM-1/topics/sensor", {"items": []})
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+        {"state": {"reported": {}, "desired": {}}},
+    )
+    await asyncio.sleep(0)  # let call_soon_threadsafe callbacks run
+
+    assert ("86DM-1", "topics/sensor") in seen
+    assert ("86DM-1", "shadows/state/get/accepted") in seen
+
+
+# ---------------------------------------------------------------------------
+# regression guards for the shadow behaviour the demux must not disturb
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_only_get_accepted_resolves_a_pending_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """update/accepted may be a partial delta and must not answer a get."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    await asyncio.sleep(0)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/update/accepted",
+        {"state": {"reported": {"powerEnabled": True}}},
+    )
+    await asyncio.sleep(0)
+    assert not task.done()
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+        {"state": {"reported": {"tempSetpoint": 21}, "desired": {}}},
+    )
+    assert await task == {"reported": {"tempSetpoint": 21}, "desired": {}}
+
+
+@pytest.mark.asyncio
+async def test_get_rejected_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rejected shadow get keeps failing the pending read."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    await asyncio.sleep(0)
+
+    _deliver(client, "users/sub-1/devices/86DM-1/shadows/state/get/rejected", {})
+
+    with pytest.raises(ApiError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_topics_message_does_not_resolve_a_shadow_get(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Capturing topics/* must not leak into the shadow request/response path."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    await asyncio.sleep(0)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/topics/sensor",
+        {"items": [{"roomTemperature": 24.5}]},
+    )
+    await asyncio.sleep(0)
+
+    assert not task.done()
+    task.cancel()
