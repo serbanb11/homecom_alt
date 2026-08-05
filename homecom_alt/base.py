@@ -462,32 +462,49 @@ class HomeComAlt:
                 continue
         raise last_exc or ApiError("Both time endpoints failed.")
 
-    def check_jwt(self) -> bool:
-        """Check if token is expired."""
+    def token_expires_at(self) -> datetime | None:
+        """Return when the access token expires (UTC), or None if unknown.
+
+        The signature is not verified (same as :meth:`check_jwt`) — the ``exp``
+        claim is only used to decide when to refresh or reconnect.
+        """
         if not self._options.token:
-            return False
+            return None
         try:
             exp = jwt.decode(
                 self._options.token, options={"verify_signature": False}
             ).get("exp")
-            if exp is None:
-                _LOGGER.error("Token missing 'exp' claim")
-                return False
-            return datetime.now(UTC) < datetime.fromtimestamp(exp, UTC) - timedelta(
-                minutes=5
-            )
         except jwt.DecodeError as err:
             _LOGGER.error("Invalid token: %s", err)
-            return False
+            return None
+        if exp is None:
+            _LOGGER.error("Token missing 'exp' claim")
+            return None
+        return datetime.fromtimestamp(exp, UTC)
 
-    async def get_token(self) -> bool | None:
-        """Retrieve a new token using the refresh token."""
+    def check_jwt(self) -> bool:
+        """Check if token is expired."""
+        expires_at = self.token_expires_at()
+        if expires_at is None:
+            return False
+        return datetime.now(UTC) < expires_at - timedelta(minutes=5)
+
+    async def get_token(self, *, force: bool = False) -> bool | None:
+        """Retrieve a new token using the refresh token.
+
+        With ``force`` the :meth:`check_jwt` early-returns are skipped and the
+        refresh-token exchange is always attempted. Callers need this when a
+        token that still looks valid has been rejected by a peer — a stale MQTT
+        password, for instance — because :meth:`check_jwt` would otherwise hand
+        back the very token that was just refused. The lock is taken either way:
+        refresh tokens are single-use, so concurrent callers must serialise.
+        """
         if self._auth_provider:
-            if self.check_jwt():
+            if not force and self.check_jwt():
                 return None
 
             async with self._lock:
-                if self.check_jwt():
+                if not force and self.check_jwt():
                     return None
 
                 if self._options.refresh_token:

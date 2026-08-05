@@ -6,6 +6,7 @@ from .bacon import (
     BaconMqttClient,
     HomeComBaconRac,
     async_get_bacon_devices,
+    decode_jwt_exp,
     decode_jwt_sub,
     generate_client_id,
 )
@@ -16,6 +17,7 @@ from .exceptions import (
     AuthFailedError,
     BhcError,
     InvalidSensorDataError,
+    MqttNotAuthorizedError,
     NotRespondingError,
 )
 from .generic import HomeComGeneric
@@ -60,8 +62,10 @@ __all__ = [
     "HomeComRrc2",
     "HomeComWddw2",
     "InvalidSensorDataError",
+    "MqttNotAuthorizedError",
     "NotRespondingError",
     "async_get_bacon_devices",
+    "decode_jwt_exp",
     "decode_jwt_sub",
     "generate_client_id",
 ]

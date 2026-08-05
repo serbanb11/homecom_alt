@@ -1,6 +1,7 @@
 """Tests for HomeComAlt module."""
 # pylint: disable=protected-access
 
+import asyncio
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -444,6 +445,49 @@ async def test_check_jwt_decode_error() -> None:
 
 
 # ===========================================================================
+# token_expires_at
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_token_expires_at_returns_exp_claim() -> None:
+    """The exp claim is decoded to an aware UTC datetime."""
+    session = ClientSession()
+    expiration = int((datetime.now(UTC) + timedelta(hours=1)).timestamp())
+    bhc = HomeComAlt(
+        session,
+        _make_options(token=create_test_jwt(expiration=expiration)),
+        auth_provider=True,
+    )
+    assert bhc.token_expires_at() == datetime.fromtimestamp(expiration, UTC)
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_token_expires_at_unknown() -> None:
+    """No token, an undecodable one or one without exp → None."""
+    session = ClientSession()
+    assert (
+        HomeComAlt(session, ConnectionOptions(), auth_provider=True).token_expires_at()
+        is None
+    )
+    assert (
+        HomeComAlt(
+            session, ConnectionOptions(token="not.a.jwt"), auth_provider=True
+        ).token_expires_at()
+        is None
+    )
+    no_exp = jwt.encode({"sub": "1234567890"}, "test_secret_key", algorithm="HS256")
+    assert (
+        HomeComAlt(
+            session, ConnectionOptions(token=no_exp), auth_provider=True
+        ).token_expires_at()
+        is None
+    )
+    await session.close()
+
+
+# ===========================================================================
 # get_token
 # ===========================================================================
 
@@ -458,6 +502,78 @@ async def test_get_token_valid_jwt() -> None:
     with patch.object(homecom_alt, "check_jwt", return_value=True):
         assert await homecom_alt.get_token() is None
 
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_token_force_bypasses_valid_jwt() -> None:
+    """force=True rotates even when check_jwt() still considers the token valid.
+
+    A token can look valid and still be refused by a peer (the bacon MQTT broker
+    takes it as the password). Without force the early-return would hand back the
+    very token that was just rejected.
+    """
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=True)
+
+    mock_resp = _mock_json_response(
+        {"access_token": "forced_access", "refresh_token": "forced_refresh"}
+    )
+
+    with (
+        patch.object(bhc, "check_jwt", return_value=True) as check_jwt,
+        patch.object(
+            bhc, "_async_http_request", new=AsyncMock(return_value=mock_resp)
+        ) as request,
+    ):
+        assert await bhc.get_token(force=True) is True
+
+    assert bhc.token == "forced_access"
+    assert bhc.refresh_token == "forced_refresh"
+    check_jwt.assert_not_called()
+    request.assert_awaited_once()
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_token_force_serialises_on_the_lock() -> None:
+    """Forced refreshes still take the lock: refresh tokens are single-use."""
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=True)
+
+    with (
+        patch.object(bhc, "check_jwt", return_value=True),
+        patch.object(
+            bhc,
+            "_async_http_request",
+            new=AsyncMock(
+                return_value=_mock_json_response(
+                    {"access_token": "forced_access", "refresh_token": "forced_refresh"}
+                )
+            ),
+        ),
+    ):
+        await bhc._lock.acquire()
+        task = asyncio.create_task(bhc.get_token(force=True))
+        await asyncio.sleep(0)
+        assert not task.done()
+        bhc._lock.release()
+        assert await task is True
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_token_force_auth_provider_false() -> None:
+    """force=True does not turn a non-owner into a token rotator."""
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=False)
+
+    with patch.object(bhc, "_async_http_request", new=AsyncMock()) as request:
+        assert await bhc.get_token(force=True) is None
+
+    request.assert_not_awaited()
     await session.close()
 
 

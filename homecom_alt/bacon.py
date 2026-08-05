@@ -29,6 +29,7 @@ import logging
 import os
 import ssl
 from collections.abc import Callable
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
@@ -42,7 +43,7 @@ from .const import (
     BACON_USER_AGENT,
     BACON_WS_PATH,
 )
-from .exceptions import ApiError, AuthFailedError
+from .exceptions import ApiError, AuthFailedError, MqttNotAuthorizedError
 
 if TYPE_CHECKING:
     from aiohttp import ClientSession
@@ -52,19 +53,76 @@ _LOGGER = logging.getLogger(__name__)
 # Minimum path segments in a shadow topic before the device serial is present.
 _SHADOW_TOPIC_MIN_PARTS = 5
 
+_CREDENTIAL_REASON_CODES = frozenset({4, 5, 134, 135})
+_CREDENTIAL_REASON_NAMES = frozenset(
+    {"bad user name or password", "not authorized", "not authorised"}
+)
+
 ShadowListener = Callable[[dict[str, Any]], None]
 
 
-def decode_jwt_sub(token: str) -> str | None:
-    """Return the ``sub`` claim of a JWT access token, or ``None`` if unparsable."""
+def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
+    """Return the decoded payload of a JWT, or ``None`` if unparsable.
+
+    The signature is not verified — these claims are only used to address the
+    broker (``sub``) and to schedule a reconnect before the token expires.
+    """
     try:
         payload_b64 = token.split(".")[1]
         payload_b64 += "=" * (-len(payload_b64) % 4)
         payload = json.loads(base64.urlsafe_b64decode(payload_b64))
     except (IndexError, ValueError, binascii.Error, json.JSONDecodeError):
         return None
+    return payload if isinstance(payload, dict) else None
+
+
+def decode_jwt_sub(token: str) -> str | None:
+    """Return the ``sub`` claim of a JWT access token, or ``None`` if unparsable."""
+    payload = _decode_jwt_payload(token)
+    if payload is None:
+        return None
     sub = payload.get("sub")
     return str(sub) if sub is not None else None
+
+
+def decode_jwt_exp(token: str) -> datetime | None:
+    """Return the ``exp`` claim of a JWT access token as an aware UTC datetime."""
+    payload = _decode_jwt_payload(token)
+    if payload is None:
+        return None
+    exp = payload.get("exp")
+    if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+        return None
+    try:
+        return datetime.fromtimestamp(exp, UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _is_credential_refusal(reason_code: Any) -> bool:
+    """Return whether a refused CONNACK means the credentials were rejected.
+
+    Covers MQTT 5 ``Bad user name or password`` (0x86) and ``Not authorized``
+    (0x87) plus the MQTT 3.1.1 equivalents, by numeric code and by name.
+    """
+    value = getattr(reason_code, "value", reason_code)
+    if isinstance(value, int) and value in _CREDENTIAL_REASON_CODES:
+        return True
+    return str(reason_code).strip().lower() in _CREDENTIAL_REASON_NAMES
+
+
+def _refusal_error(reason_code: Any) -> ApiError:
+    """Map a refused CONNACK reason code onto the exception to raise.
+
+    A credential refusal becomes :class:`MqttNotAuthorizedError` — a transport
+    failure the caller fixes by reconnecting with a rotated access token — and
+    never :class:`AuthFailedError`, which would be read as a dead OAuth refresh
+    token and trigger a pointless re-authentication.
+    """
+    message = f"Bacon MQTT connect refused: {reason_code}"
+    if _is_credential_refusal(reason_code):
+        return MqttNotAuthorizedError(message)
+    return ApiError(message)
 
 
 def generate_client_id() -> str:
@@ -109,6 +167,11 @@ class BaconMqttClient:
     live changes are pushed to per-serial listeners. paho's network loop runs in
     its own thread; all results are marshalled back onto the asyncio loop that
     called :meth:`async_connect`.
+
+    Reconnection is owned by the **caller**, not by paho: the MQTT password is
+    the access token, so paho's automatic reconnect would keep re-presenting a
+    credential the broker has already refused. See :meth:`token_expires_at` for
+    scheduling a reconnect before that happens.
     """
 
     def __init__(
@@ -120,7 +183,9 @@ class BaconMqttClient:
         self._client: mqtt.Client | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sub: str | None = None
+        self._token: str | None = None
         self._connected = asyncio.Event()
+        self._connect_done = asyncio.Event()
         self._connect_rc: Any = None
         self._get_futures: dict[str, asyncio.Future] = {}
         self._listeners: dict[str, list[ShadowListener]] = {}
@@ -135,14 +200,31 @@ class BaconMqttClient:
         """Return whether the MQTT session is currently up."""
         return self._connected.is_set()
 
+    @property
+    def token_expires_at(self) -> datetime | None:
+        """Return when the token of the current session expires (UTC).
+
+        ``None`` if no token has been presented yet or it carries no usable
+        ``exp`` claim. The broker keeps the session only as long as the access
+        token it was opened with is valid, so a caller wanting an uninterrupted
+        session must reconnect with a fresh token before this moment.
+        """
+        return decode_jwt_exp(self._token) if self._token else None
+
     def register_listener(self, serial: str, callback: ShadowListener) -> None:
         """Register a callback invoked (on the asyncio loop) on shadow updates."""
         self._listeners.setdefault(serial, []).append(callback)
 
     async def async_connect(self, token: str, sub: str) -> None:
-        """(Re)connect to the broker with a fresh token. Idempotent."""
+        """(Re)connect to the broker with a fresh token. Idempotent.
+
+        Raises :class:`MqttNotAuthorizedError` when the broker refuses the
+        credentials (i.e. the access token has expired) and :class:`ApiError` for
+        any other refusal or a timeout.
+        """
         self._loop = asyncio.get_running_loop()
         self._sub = sub
+        self._token = token
         await self.async_disconnect()
 
         client = mqtt.Client(
@@ -150,6 +232,10 @@ class BaconMqttClient:
             client_id=self._client_id,
             protocol=mqtt.MQTTv5,
             transport="websockets",
+            # Never let paho re-dial on its own: the stored password is the
+            # access token, so an automatic retry would replay a credential the
+            # broker has already refused, producing "Not authorized" bursts.
+            reconnect_on_failure=False,
         )
         client.ws_set_options(
             path=BACON_WS_PATH,
@@ -169,6 +255,7 @@ class BaconMqttClient:
 
         self._client = client
         self._connected.clear()
+        self._connect_done.clear()
         self._connect_rc = None
 
         try:
@@ -183,14 +270,19 @@ class BaconMqttClient:
         client.loop_start()
 
         try:
-            await asyncio.wait_for(self._connected.wait(), timeout=15)
+            await asyncio.wait_for(self._connect_done.wait(), timeout=15)
         except TimeoutError as err:
+            reason_code = self._connect_rc
             await self.async_disconnect()
-            if self._connect_rc not in (0, None):
-                raise AuthFailedError(
-                    f"Bacon MQTT connect refused: {self._connect_rc}"
-                ) from err
-            raise ApiError("Timed out connecting to bacon MQTT broker") from err
+            if reason_code in (0, None):
+                raise ApiError("Timed out connecting to bacon MQTT broker") from err
+            raise _refusal_error(reason_code) from err
+        if self._connected.is_set():
+            return
+        # CONNACK arrived but was a refusal; _on_connect woke us straight away.
+        reason_code = self._connect_rc
+        await self.async_disconnect()
+        raise _refusal_error(reason_code)
 
     async def async_disconnect(self) -> None:
         """Tear down the current MQTT connection if any."""
@@ -257,12 +349,24 @@ class BaconMqttClient:
         self._connect_rc = reason_code
         if str(reason_code) not in ("Success", "0") and rc != 0:
             _LOGGER.error("Bacon MQTT connection refused: %s", reason_code)
+            # Wake async_connect now instead of leaving it to time out: it
+            # classifies the reason code and reports a transport-credential
+            # refusal separately from any other failure. Auto-reconnect is off,
+            # so paho's network thread simply winds down after this.
+            self._signal_connect_done()
             return
         # The app subscribes to the whole user namespace; do the same so any
-        # device's shadow get/update replies are delivered.
+        # device's shadow get/update replies are delivered. The broker uses clean
+        # start, so this has to be re-issued on every (re)connect.
         client.subscribe(f"users/{self._sub}/#")
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._connected.set)
+        self._signal_connect_done()
+
+    def _signal_connect_done(self) -> None:
+        """Tell a waiting :meth:`async_connect` that the CONNACK has landed."""
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._connect_done.set)
 
     def _on_disconnect(
         self,
