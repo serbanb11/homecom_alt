@@ -565,6 +565,47 @@ async def test_get_token_force_serialises_on_the_lock() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_token_concurrent_force_refreshes_once() -> None:
+    """Two concurrent forced refreshes rotate the token exactly once.
+
+    Both callers skip the check_jwt guard, so the second must notice — inside the
+    lock — that the token was already rotated and return without spending a
+    second single-use refresh token.
+    """
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=True)
+
+    gate = asyncio.Event()
+    calls = 0
+
+    async def fake_request(*_args: object, **_kwargs: object) -> AsyncMock:
+        nonlocal calls
+        calls += 1
+        await gate.wait()  # hold the lock so the second caller catches up
+        return _mock_json_response(
+            {"access_token": "rotated_access", "refresh_token": "rotated_refresh"}
+        )
+
+    with (
+        patch.object(bhc, "check_jwt", return_value=True),
+        patch.object(bhc, "_async_http_request", new=fake_request),
+    ):
+        first = asyncio.create_task(bhc.get_token(force=True))
+        second = asyncio.create_task(bhc.get_token(force=True))
+        for _ in range(3):
+            await asyncio.sleep(0)  # let both capture the token; one grabs the lock
+        gate.set()
+        results = sorted(str(r) for r in await asyncio.gather(first, second))
+
+    assert calls == 1
+    assert results == ["None", "True"]  # one refreshed, one skipped
+    assert bhc.token == "rotated_access"
+    assert bhc.refresh_token == "rotated_refresh"
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_get_token_force_auth_provider_false() -> None:
     """force=True does not turn a non-owner into a token rotator."""
     session = ClientSession()

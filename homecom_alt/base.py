@@ -498,13 +498,22 @@ class HomeComAlt:
         password, for instance — because :meth:`check_jwt` would otherwise hand
         back the very token that was just refused. The lock is taken either way:
         refresh tokens are single-use, so concurrent callers must serialise.
+
+        Serialising alone is not enough for ``force``: two forced callers both
+        skip the ``check_jwt`` guard, so the second would refresh again with the
+        token the first just rotated in. The token seen before the lock is
+        therefore compared inside it — if it has already changed, another caller
+        refreshed while we waited and we return without spending a second token.
         """
         if self._auth_provider:
             if not force and self.check_jwt():
                 return None
 
+            token_before = self._options.token
             async with self._lock:
                 if not force and self.check_jwt():
+                    return None
+                if force and self._options.token != token_before:
                     return None
 
                 if self._options.refresh_token:

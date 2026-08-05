@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import threading
 from datetime import UTC, datetime
 from typing import Any, Self
 
@@ -447,6 +448,42 @@ async def test_raw_snapshot_caps_oversized_payloads(
 
     stored = client.raw_snapshot()["86DM-1/shadows/state/update/documents"]["payload"]
     assert stored["schedules"] == {"__truncated__": 50_000}
+
+
+def test_raw_snapshot_thread_safe_during_concurrent_caching() -> None:
+    """raw_snapshot() must not raise while messages land on the paho thread.
+
+    ``_cache_raw`` runs on paho's network thread and ``raw_snapshot`` on the
+    event loop. Each delivered message here uses a fresh serial, so the cache
+    keeps growing; without a lock the snapshot's ``sorted(self._raw.items())``
+    would hit "dictionary changed size during iteration".
+    """
+    client = BaconMqttClient("a" * 64)
+    inserts = 3000
+    errors: list[BaseException] = []
+
+    def writer() -> None:
+        for i in range(inserts):
+            try:
+                _deliver(
+                    client,
+                    f"users/sub-1/devices/dev-{i}/topics/sensor",
+                    {"items": [{"i": i}]},
+                )
+            except BaseException as err:  # noqa: BLE001 - surfaced to the test
+                errors.append(err)
+                return
+
+    thread = threading.Thread(target=writer)
+    thread.start()
+    # Snapshot continuously while the cache keeps gaining new keys, so the
+    # snapshot's iteration overlaps a mutation on the writer thread.
+    while thread.is_alive():
+        assert isinstance(client.raw_snapshot(), dict)
+    thread.join()
+
+    assert not errors
+    assert len(client.raw_snapshot()) == inserts
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,7 @@ import json
 import logging
 import os
 import ssl
+import threading
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -274,6 +275,10 @@ class BaconMqttClient:
         # entry per key: only the newest payload of each topic is of interest,
         # and for a push-only channel its age matters as much as its content.
         self._raw: dict[tuple[str | None, str], dict[str, Any]] = {}
+        # Guards ``_raw``: written on paho's network thread (``_cache_raw``) and
+        # read from the event loop (``raw_snapshot``/``get_topic``). Without it a
+        # snapshot taken mid-publish raises "dictionary changed size".
+        self._raw_lock = threading.Lock()
 
     @property
     def client_id(self) -> str:
@@ -330,13 +335,15 @@ class BaconMqttClient:
         sharing/claim traffic, and ``topics/info`` includes Matter onboarding
         secrets.
         """
+        with self._raw_lock:
+            items = list(self._raw.items())
         return {
             f"{serial or '-'}/{path}": {
                 "payload": entry["payload"],
                 "received_at": entry["received_at"].isoformat(),
             }
             for (serial, path), entry in sorted(
-                self._raw.items(), key=lambda item: (item[0][0] or "", item[0][1])
+                items, key=lambda item: (item[0][0] or "", item[0][1])
             )
         }
 
@@ -347,7 +354,8 @@ class BaconMqttClient:
         verb for it anywhere in the protocol — so this returns ``None`` until the
         device has published, and must never be turned into a publish.
         """
-        entry = self._raw.get((serial, f"{_TOPICS_CHANNEL}/{subtopic}"))
+        with self._raw_lock:
+            entry = self._raw.get((serial, f"{_TOPICS_CHANNEL}/{subtopic}"))
         return entry["payload"] if entry else None
 
     def get_sensor(self, serial: str) -> dict[str, Any] | None:
@@ -605,10 +613,12 @@ class BaconMqttClient:
 
     def _cache_raw(self, parsed: ParsedTopic, payload: Any) -> None:
         """Keep the newest payload per topic, size-capped."""
-        self._raw[parsed.serial, parsed.channel_path] = {
+        entry = {
             "payload": self._cap(payload),
             "received_at": datetime.now(UTC),
         }
+        with self._raw_lock:
+            self._raw[parsed.serial, parsed.channel_path] = entry
 
     @classmethod
     def _cap(cls, payload: Any) -> Any:
