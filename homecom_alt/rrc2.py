@@ -400,7 +400,7 @@ class HomeComRrc2(HomeComK40):
         """Fetch the rrc2-supported endpoint set and return a BHCDeviceRrc2."""
         await self.get_token()
 
-        firmware = await self.async_get_firmware(device_id)
+        firmware = await self.async_get_firmware_or_default(device_id)
 
         # --- Static endpoints: single bulk call ---
         bulk_endpoints = [

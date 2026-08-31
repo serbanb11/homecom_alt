@@ -6,12 +6,14 @@ import json
 import threading
 from datetime import UTC, datetime
 from typing import Any, Self
+from unittest.mock import AsyncMock
 
 import pytest
 
 from homecom_alt import bacon
 from homecom_alt.bacon import (
     BaconMqttClient,
+    HomeComBaconRac,
     async_get_bacon_devices,
     decode_jwt_exp,
     decode_jwt_sub,
@@ -581,3 +583,21 @@ async def test_topics_message_does_not_resolve_a_shadow_get(
 
     assert not task.done()
     task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_async_set_feature_publishes_desired() -> None:
+    """async_set_feature publishes the boolean field to the shadow's desired."""
+    client = AsyncMock()
+    rac = HomeComBaconRac(client, "86DM-1")
+
+    await rac.async_set_feature("ionizerEnabled", enabled=True)
+    client.async_set_desired.assert_awaited_once_with(
+        "86DM-1", {"ionizerEnabled": True}
+    )
+
+    client.async_set_desired.reset_mock()
+    await rac.async_set_feature("fullPowerEnabled", 0)
+    client.async_set_desired.assert_awaited_once_with(
+        "86DM-1", {"fullPowerEnabled": False}
+    )

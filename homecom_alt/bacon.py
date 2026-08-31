@@ -719,3 +719,12 @@ class HomeComBaconRac:
             desired["vSwingEnabled"] = bool(vertical)
         if desired:
             await self._client.async_set_desired(self.device_id, desired)
+
+    async def async_set_feature(self, field: str, enabled: bool) -> None:
+        """Enable/disable a boolean comfort feature, e.g. ``ionizerEnabled``.
+
+        Whether the device currently accepts a given field is mode-dependent and
+        advertised via the per-field ``ro`` flag in ``topics/meta``; this only
+        publishes the desired state and does not itself check writability.
+        """
+        await self._client.async_set_desired(self.device_id, {field: bool(enabled)})

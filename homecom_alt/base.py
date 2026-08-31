@@ -321,6 +321,22 @@ class HomeComAlt:
         )
         return await self._to_data(response)
 
+    async def async_get_firmware_or_default(self, device_id: str) -> Any:
+        """Get firmware, or a placeholder if the endpoint does not respond.
+
+        Firmware is cosmetic ``sw_version`` metadata. The versionFirmware endpoint
+        is flaky on some gateways, so a failure here must not abort a device
+        update (which would leave the whole entity unavailable). Falls back to
+        ``{"value": "unknown"}`` on any transport/API failure or missing value.
+        """
+        try:
+            firmware = await self.async_get_firmware(device_id)
+        except (ApiError, NotRespondingError, TimeoutError):
+            firmware = None
+        if not isinstance(firmware, dict) or "value" not in firmware:
+            return {"value": "unknown"}
+        return firmware
+
     async def async_get_system_info(self, device_id: str) -> Any:
         """Get system info."""
         response = await self._async_http_request(

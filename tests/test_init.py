@@ -3815,3 +3815,26 @@ def test_log_endpoint_status_levels(caplog, status, expected_level) -> None:  # 
     assert records[0].levelname == expected_level
     assert endpoint in records[0].getMessage()
     assert str(status) in records[0].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_async_get_firmware_or_default_falls_back_on_not_responding() -> None:
+    """A non-responding firmware endpoint must not abort the caller (#171)."""
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+
+    # Endpoint times out -> placeholder instead of propagating NotRespondingError.
+    bhc.async_get_firmware = AsyncMock(
+        side_effect=NotRespondingError("versionFirmware is not responding")
+    )
+    assert await bhc.async_get_firmware_or_default("079420722") == {"value": "unknown"}
+
+    # Missing/None payload also yields the placeholder.
+    bhc.async_get_firmware = AsyncMock(return_value=None)
+    assert await bhc.async_get_firmware_or_default("079420722") == {"value": "unknown"}
+
+    # A real value is passed through unchanged.
+    bhc.async_get_firmware = AsyncMock(return_value={"value": "1.2.3"})
+    assert await bhc.async_get_firmware_or_default("079420722") == {"value": "1.2.3"}
+
+    await session.close()

@@ -305,7 +305,7 @@ class HomeComIcom(HomeComK40):
         """
         await self.get_token()
 
-        firmware = await self.async_get_firmware(device_id)
+        firmware = await self.async_get_firmware_or_default(device_id)
 
         # --- Static endpoints: single bulk call ---
         bulk_endpoints = [
