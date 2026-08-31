@@ -477,7 +477,7 @@ class BaconMqttClient:
             try:
                 client.loop_stop()
                 client.disconnect()
-            except Exception:  # noqa: BLE001 - best-effort teardown
+            except Exception:  # best-effort teardown
                 _LOGGER.debug("Ignoring bacon MQTT teardown error", exc_info=True)
 
         if self._loop is not None:
