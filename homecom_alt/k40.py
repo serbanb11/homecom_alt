@@ -85,6 +85,12 @@ from .const import (
     BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
     BOSCHCOM_ENDPOINT_POWER_LIMITATION,
     BOSCHCOM_ENDPOINT_SILENT_MODE,
+    BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS,
+    BOSCHCOM_ENDPOINT_SOLAR_COLLECTOR_TEMP,
+    BOSCHCOM_ENDPOINT_SOLAR_MAX_CYLINDER_TEMP,
+    BOSCHCOM_ENDPOINT_SOLAR_TANK_BOTTOM_TEMP,
+    BOSCHCOM_ENDPOINT_SOLAR_TANK_TEMP,
+    BOSCHCOM_ENDPOINT_SOLAR_YIELD,
     BOSCHCOM_ENDPOINT_VENTILATION,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
     BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
@@ -873,6 +879,23 @@ class HomeComK40(HomeComAlt):
             {"value": mode},
             1,
         )
+
+    async def async_get_solar_circuit_value(
+        self, device_id: str, solar_id: str, endpoint: str
+    ) -> Any:
+        """Get a single value of a solar circuit."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS
+            + "/"
+            + solar_id
+            + endpoint,
+        )
+        return await self._to_data(response)
 
     async def async_get_dhw_actual_temp(self, device_id: str, dhw_id: str) -> Any:
         """Get dhw actual temp."""
@@ -2122,6 +2145,50 @@ class HomeComK40(HomeComAlt):
             device_id, dev_id, BOSCHCOM_ENDPOINT_DEVICE_CURRENT_ROOM_SETPOINT
         )
 
+    async def _populate_solar_circuits(
+        self, device_id: str, solar_circuits: Any, semaphore: asyncio.BoundedSemaphore
+    ) -> list:
+        """Fetch the per-circuit values of every solar thermal circuit.
+
+        Systems without solar collectors return 404 for /solarCircuits, which
+        async_request_bulk maps to None; that yields an empty reference list.
+        """
+        refs: list[Any] = (solar_circuits or {}).get("references", []) or []
+        if not refs:
+            return []
+
+        async def limited_call(coro: Any) -> Any:
+            async with semaphore:
+                return await coro
+
+        async def populate(ref: dict[str, Any]) -> None:
+            solar_id = ref["id"].split("/")[-1]
+            (
+                ref["collectorTemperature"],
+                ref["solarYield"],
+                ref["dhwTankTemperature"],
+                ref["dhwTankBottomTemperature"],
+                ref["maxCylinderTemperature"],
+            ) = await asyncio.gather(
+                *(
+                    limited_call(
+                        self.async_get_solar_circuit_value(
+                            device_id, solar_id, endpoint
+                        )
+                    )
+                    for endpoint in (
+                        BOSCHCOM_ENDPOINT_SOLAR_COLLECTOR_TEMP,
+                        BOSCHCOM_ENDPOINT_SOLAR_YIELD,
+                        BOSCHCOM_ENDPOINT_SOLAR_TANK_TEMP,
+                        BOSCHCOM_ENDPOINT_SOLAR_TANK_BOTTOM_TEMP,
+                        BOSCHCOM_ENDPOINT_SOLAR_MAX_CYLINDER_TEMP,
+                    )
+                )
+            )
+
+        await asyncio.gather(*(populate(ref) for ref in refs))
+        return refs
+
     async def async_update(self, device_id: str) -> BHCDeviceK40:  # noqa: PLR0915
         """Retrieve data from the device concurrently with limited concurrency."""
         await self.get_token()
@@ -2145,6 +2212,8 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_OUTDOOR_TEMP,
             BOSCHCOM_ENDPOINT_VENTILATION,
             BOSCHCOM_ENDPOINT_ZONES,
+            # Solar thermal (absent without collectors; 404 -> None)
+            BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS,
             BOSCHCOM_ENDPOINT_HS_FLAME,
             BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
             BOSCHCOM_ENDPOINT_DEVICES,
@@ -2177,6 +2246,7 @@ class HomeComK40(HomeComAlt):
         outdoor_temp = bulk_response.get(BOSCHCOM_ENDPOINT_OUTDOOR_TEMP)
         ventilation = bulk_response.get(BOSCHCOM_ENDPOINT_VENTILATION)
         zones = bulk_response.get(BOSCHCOM_ENDPOINT_ZONES)
+        solar_circuits = bulk_response.get(BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS)
         if zones and "references" in zones:
             zones["references"] = [
                 ref
@@ -2604,6 +2674,10 @@ class HomeComK40(HomeComAlt):
         else:
             device_refs = {}
 
+        solar_refs = await self._populate_solar_circuits(
+            device_id, solar_circuits, semaphore
+        )
+
         return BHCDeviceK40(
             device=device_id,
             firmware=[],
@@ -2624,4 +2698,5 @@ class HomeComK40(HomeComAlt):
             indoor_humidity=indoor_humidity,
             devices=device_refs,
             pool=pool,
+            solar_circuits=solar_refs,
         )

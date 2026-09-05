@@ -2048,6 +2048,76 @@ async def test_k40_async_update_without_pool() -> None:
     await session.close()
 
 
+_SOLAR_CIRCUIT_VALUES = {
+    "/collectorTemperature": 68.4,
+    "/solarYield": 123,
+    "/dhwTankBottomTemperature": 41.2,
+    "/dhwTankTemperature": 55.1,
+    "/maxCylinderTemperature": 80,
+}
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_with_solar_circuits() -> None:
+    """K40 update populates solar circuits and their per-circuit values."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+
+            def _resolve(path):  # noqa: ANN001, ANN202
+                if path.endswith("/solarCircuits"):
+                    return {"references": [{"id": "/solarCircuits/sc1"}]}
+                if path.endswith("/dhwCircuits"):
+                    return {"references": []}
+                if path.endswith("/heatingCircuits"):
+                    return {"references": []}
+                return None
+
+            return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
+        for suffix, value in _SOLAR_CIRCUIT_VALUES.items():
+            if url.endswith(suffix):
+                return _mock_json_response({"value": value})
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.solar_circuits is not None
+    assert len(result.solar_circuits) == 1
+    circuit = result.solar_circuits[0]
+    assert circuit["id"] == "/solarCircuits/sc1"
+    assert circuit["collectorTemperature"] == {"value": 68.4}
+    assert circuit["solarYield"] == {"value": 123}
+    assert circuit["dhwTankTemperature"] == {"value": 55.1}
+    assert circuit["dhwTankBottomTemperature"] == {"value": 41.2}
+    assert circuit["maxCylinderTemperature"] == {"value": 80}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_async_update_without_solar_circuits() -> None:
+    """K40 update yields an empty list on systems without solar collectors."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            return _k40_bulk_route(url, args, kwargs)
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.solar_circuits == []
+
+    await session.close()
+
+
 @pytest.mark.asyncio
 async def test_k40_ventilation_setters() -> None:
     """Test ventilation setter methods."""
