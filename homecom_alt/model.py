@@ -59,6 +59,7 @@ class BHCDeviceK40:
     devices: list | None
     energy_gas_unit: dict | None = None
     pool: dict | None = None
+    solar_circuits: list | None = None
 
 
 @dataclass(frozen=True)

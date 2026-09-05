@@ -293,6 +293,11 @@ BOSCHCOM_ENDPOINT_WIFI_STATE: Final[str] = "/resource/gateway/wifi/state"
 
 # Icom-specific endpoints (subset of K40 namespace plus a few extras).
 BOSCHCOM_ENDPOINT_SOLAR_CIRCUITS: Final[str] = "/resource/solarCircuits"
+BOSCHCOM_ENDPOINT_SOLAR_COLLECTOR_TEMP: Final[str] = "/collectorTemperature"
+BOSCHCOM_ENDPOINT_SOLAR_YIELD: Final[str] = "/solarYield"
+BOSCHCOM_ENDPOINT_SOLAR_TANK_TEMP: Final[str] = "/dhwTankTemperature"
+BOSCHCOM_ENDPOINT_SOLAR_TANK_BOTTOM_TEMP: Final[str] = "/dhwTankBottomTemperature"
+BOSCHCOM_ENDPOINT_SOLAR_MAX_CYLINDER_TEMP: Final[str] = "/maxCylinderTemperature"
 BOSCHCOM_ENDPOINT_SYSTEM_BUS: Final[str] = "/resource/system/bus"
 BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODES: Final[str] = "/resource/system/holidayModes"
 BOSCHCOM_ENDPOINT_SYSTEM_HOLIDAY_MODE: Final[str] = "/resource/system/holidayMode"
