@@ -279,6 +279,15 @@ class HomeComAlt:
                 and url == "https://singlekey-id.com/auth/connect/token"
             ):
                 return None
+            # 403/404 are tolerated on reads, which probe resources a device may
+            # not have. A refused write must never look like success: it used
+            # to return {} here, so the caller carried on and the value simply
+            # reverted on the next poll (hass#170).
+            if method.upper() == "PUT" and error.status in (
+                HTTPStatus.FORBIDDEN.value,
+                HTTPStatus.NOT_FOUND.value,
+            ):
+                raise ApiError(f"Write to {url} was refused: {error.status}") from error
             if error.status == HTTPStatus.NOT_FOUND.value:
                 _LOGGER.debug("Endpoint %s returned %s", url, error.status)
                 if method.upper() == "GET":

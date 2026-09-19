@@ -258,12 +258,6 @@ class HomeComIcom(HomeComK40):
             device_id, hc_id, BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT
         )
 
-    async def async_get_hc_suwi_switch_mode(self, device_id: str, hc_id: str) -> Any:
-        """HC summer/winter switch mode."""
-        return await self._async_get_hc_subresource(
-            device_id, hc_id, BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE
-        )
-
     async def async_get_dhw_holiday_activated(self, device_id: str, dhw_id: str) -> Any:
         """Per-DHW holiday-mode activated flag."""
         await self.get_token()

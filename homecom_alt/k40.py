@@ -59,6 +59,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
     BOSCHCOM_ENDPOINT_HC_SUPPLY_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+    BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE,
     BOSCHCOM_ENDPOINT_HC_TEMPORARY_ROOM_SETPOINT,
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
@@ -231,7 +232,12 @@ class HomeComK40(HomeComAlt):
     async def async_put_hc_suwi_mode(
         self, device_id: str, hc_id: str, mode: str
     ) -> None:
-        """Set summer winter mode."""
+        """Set summer winter mode.
+
+        Deprecated: currentSuWiMode reports the mode the controller is in and
+        is read-only, so the gateway refuses this write (hass#170). Use
+        :meth:`async_put_hc_suwi_switch_mode`.
+        """
         await self.get_token()
         await self._async_http_request(
             "put",
@@ -242,6 +248,39 @@ class HomeComK40(HomeComAlt):
             + "/"
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+            {"value": mode},
+            1,
+        )
+
+    async def async_get_hc_suwi_switch_mode(self, device_id: str, hc_id: str) -> Any:
+        """Get hc summer/winter switch mode, the writable setting."""
+        await self.get_token()
+        response = await self._async_http_request(
+            "get",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE,
+        )
+        return await self._to_data(response)
+
+    async def async_put_hc_suwi_switch_mode(
+        self, device_id: str, hc_id: str, mode: str
+    ) -> None:
+        """Set hc summer/winter switch mode."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE,
             {"value": mode},
             1,
         )
@@ -2435,6 +2474,7 @@ class HomeComK40(HomeComAlt):
                 hc_endpoints = [
                     prefix + BOSCHCOM_ENDPOINT_HC_OPERATION_MODE,
                     prefix + BOSCHCOM_ENDPOINT_HC_SUWI_MODE,
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE,
                     prefix + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE,
                     prefix + BOSCHCOM_ENDPOINT_HC_ROOM_TEMP,
                     prefix + BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
@@ -2458,6 +2498,9 @@ class HomeComK40(HomeComAlt):
                 )
                 ref["currentSuWiMode"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_SUWI_MODE
+                )
+                ref["suWiSwitchMode"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_SUWI_SWITCH_MODE
                 )
                 ref["heatCoolMode"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_HEATCOOL_MODE

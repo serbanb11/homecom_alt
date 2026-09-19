@@ -252,6 +252,27 @@ async def test_async_http_request_forbidden_returns_empty_dict() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND])
+async def test_async_http_request_refused_put_raises(status) -> None:  # noqa: ANN001
+    """A refused write raises instead of looking like success (hass#170).
+
+    Reads keep tolerating 403/404 (see the tests above); only PUT changed.
+    """
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(None, (), status=status)
+        with pytest.raises(ApiError, match=f"refused: {status.value}"):
+            await bhc._async_http_request("put", "http://test.com", {"value": 1}, 1)
+        # A refused write must not poison the GET not-found cache.
+        assert bhc._not_found_cache == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_async_http_request_other_client_error_raises_api_error() -> None:
     """Test that non-special HTTP errors raise ApiError."""
     session = ClientSession()
@@ -1345,6 +1366,8 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
                     return {"value": "auto"}
                 if "heatingCircuits" in path and "currentSuWiMode" in path:
                     return {"value": "summer"}
+                if "heatingCircuits" in path and "suWiSwitchMode" in path:
+                    return {"value": "automatic", "writeable": 1}
                 if "heatingCircuits" in path and "heatCoolMode" in path:
                     return {"value": "heat"}
                 if "heatingCircuits" in path and "roomtemperature" in path:
@@ -1422,6 +1445,8 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     assert isinstance(result.heating_circuits, list)
     assert len(result.heating_circuits) == 1
     hc = result.heating_circuits[0]
+    assert hc["currentSuWiMode"] == {"value": "summer"}
+    assert hc["suWiSwitchMode"] == {"value": "automatic", "writeable": 1}
     assert hc["maxSupply"] == {"value": 90}
     assert hc["minSupply"] == {"value": 20}
     assert hc["heatCurveMax"] == {"value": 75}
@@ -1620,6 +1645,45 @@ async def test_k40_hc_suwi_mode() -> None:
     with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
         await k40.async_put_hc_suwi_mode(DEVICE_ID, "hc1", "winter")
         assert mock_req.call_args[0][2] == {"value": "winter"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_hc_suwi_switch_mode() -> None:
+    """The writable summer/winter setting is suWiSwitchMode (hass#170)."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    with patch.object(
+        k40,
+        "_async_http_request",
+        new=AsyncMock(return_value=_mock_json_response({"value": "automatic"})),
+    ) as mock_req:
+        result = await k40.async_get_hc_suwi_switch_mode(DEVICE_ID, "hc1")
+        assert result == {"value": "automatic"}
+        assert mock_req.call_args[0][0] == "get"
+        assert mock_req.call_args[0][1].endswith("/heatingCircuits/hc1/suWiSwitchMode")
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock()) as mock_req:
+        await k40.async_put_hc_suwi_switch_mode(DEVICE_ID, "hc1", "forced")
+        assert mock_req.call_args[0][0] == "put"
+        assert mock_req.call_args[0][1].endswith("/heatingCircuits/hc1/suWiSwitchMode")
+        assert mock_req.call_args[0][2] == {"value": "forced"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_icom_inherits_hc_suwi_switch_mode_put() -> None:
+    """Icom writes the setting through the inherited K40 method."""
+    session = ClientSession()
+    icom = _make_icom(session)
+
+    with patch.object(icom, "_async_http_request", new=AsyncMock()) as mock_req:
+        await icom.async_put_hc_suwi_switch_mode(DEVICE_ID, "hc1", "cooling")
+        assert mock_req.call_args[0][1].endswith("/heatingCircuits/hc1/suWiSwitchMode")
+        assert mock_req.call_args[0][2] == {"value": "cooling"}
 
     await session.close()
 
