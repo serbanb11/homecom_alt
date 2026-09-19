@@ -26,6 +26,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_TEMP,
     BOSCHCOM_ENDPOINT_TIMER,
 )
+from .exceptions import NotRespondingError
 from .model import (
     BHCDeviceRac,
 )
@@ -100,6 +101,19 @@ class HomeComRac(HomeComAlt):
 
         if bulk_response is None:
             bulk_response = {}
+
+        # standardFunctions carries the power state, mode and setpoint: without
+        # it there is no device to report. Returning an empty device here looked
+        # like a successful update and crashed consumers reading it (hass#180,
+        # an unreachable unit answering every endpoint with 406). The other
+        # three endpoints stay optional — some units legitimately lack them.
+        if bulk_response.get(BOSCHCOM_ENDPOINT_STANDARD) is None:
+            status = self._last_endpoint_status.get(
+                (device_id, BOSCHCOM_ENDPOINT_STANDARD)
+            )
+            reason = f"returned {status}" if status is not None else "returned no data"
+            msg = f"RAC {device_id}: {BOSCHCOM_ENDPOINT_STANDARD} {reason}"
+            raise NotRespondingError(msg)
 
         notifications = bulk_response.get(BOSCHCOM_ENDPOINT_NOTIFICATIONS, {})
         stardard_functions = bulk_response.get(BOSCHCOM_ENDPOINT_STANDARD, {})

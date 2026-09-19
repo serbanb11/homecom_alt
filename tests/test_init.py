@@ -3333,9 +3333,39 @@ async def test_to_data_content_type_error_returns_none() -> None:
     assert result is None
 
 
+_RAC_BULK_PATHS = (
+    "/notifications",
+    "/airConditioning/standardFunctions",
+    "/airConditioning/advancedFunctions",
+    "/airConditioning/switchPrograms/list",
+)
+
+
+def _rac_bulk_response(statuses):  # noqa: ANN001, ANN202
+    """Build a RAC bulk reply with a gateway status per resource path."""
+    return _mock_json_response(
+        [
+            {
+                "gatewayId": DEVICE_ID,
+                "resourcePaths": [
+                    {
+                        "resourcePath": path,
+                        "serverStatus": 200,
+                        "gatewayResponse": {
+                            "status": statuses.get(path, 200),
+                            "payload": {"references": [{"id": path}], "values": []},
+                        },
+                    }
+                    for path in _RAC_BULK_PATHS
+                ],
+            }
+        ]
+    )
+
+
 @pytest.mark.asyncio
 async def test_rac_async_update_none_endpoints() -> None:
-    """RAC async_update completes when bulk returns None."""
+    """RAC async_update raises when the bulk request returns nothing at all."""
     session = ClientSession()
     rac = _make_rac(session)
 
@@ -3344,14 +3374,72 @@ async def test_rac_async_update_none_endpoints() -> None:
             return _mock_json_response(None)
         return _mock_json_response({})
 
-    with patch.object(rac, "_async_http_request", new=AsyncMock(side_effect=route)):
+    with (
+        patch.object(rac, "_async_http_request", new=AsyncMock(side_effect=route)),
+        pytest.raises(NotRespondingError, match="returned no data"),
+    ):
+        await rac.async_update(DEVICE_ID)
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rac_async_update_all_endpoints_406() -> None:
+    """An unreachable unit is an error, not an empty device (hass#180)."""
+    session = ClientSession()
+    rac = _make_rac(session)
+    bulk = _rac_bulk_response(dict.fromkeys(_RAC_BULK_PATHS, 406))
+
+    with (
+        patch.object(rac, "_async_http_request", new=AsyncMock(return_value=bulk)),
+        pytest.raises(NotRespondingError, match="standardFunctions returned 406"),
+    ):
+        await rac.async_update(DEVICE_ID)
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rac_async_update_optional_endpoints_406() -> None:
+    """Only standardFunctions is required; the other endpoints stay optional."""
+    session = ClientSession()
+    rac = _make_rac(session)
+    bulk = _rac_bulk_response(
+        {
+            path: 406
+            for path in _RAC_BULK_PATHS
+            if path != "/airConditioning/standardFunctions"
+        }
+    )
+
+    with patch.object(rac, "_async_http_request", new=AsyncMock(return_value=bulk)):
         result = await rac.async_update(DEVICE_ID)
 
-    assert result.device == DEVICE_ID
-    assert result.stardard_functions == []
+    assert result.stardard_functions == [{"id": "/airConditioning/standardFunctions"}]
     assert result.advanced_functions == []
     assert result.switch_programs == []
     assert result.notifications == []
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rac_async_update_recovers_after_406() -> None:
+    """A later good poll returns data and forgets the recorded status."""
+    session = ClientSession()
+    rac = _make_rac(session)
+    replies = [
+        _rac_bulk_response(dict.fromkeys(_RAC_BULK_PATHS, 406)),
+        _rac_bulk_response({}),
+    ]
+
+    with patch.object(rac, "_async_http_request", new=AsyncMock(side_effect=replies)):
+        with pytest.raises(NotRespondingError):
+            await rac.async_update(DEVICE_ID)
+        result = await rac.async_update(DEVICE_ID)
+
+    assert result.stardard_functions == [{"id": "/airConditioning/standardFunctions"}]
+    assert rac._last_endpoint_status == {}
 
     await session.close()
 

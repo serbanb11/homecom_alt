@@ -104,6 +104,9 @@ class HomeComAlt:
         self._lock = asyncio.Lock()
         self._not_found_cache: dict[str, float] = {}
         self._server_error_counts: dict[str, int] = {}
+        # Last non-OK bulk status per (device, endpoint), cleared on success, so
+        # a device class can say why a required endpoint produced no payload.
+        self._last_endpoint_status: dict[tuple[str, str], int] = {}
 
     @property
     def refresh_token(self) -> str | None:
@@ -189,15 +192,20 @@ class HomeComAlt:
                 endpoint = sent_to_original.get(returned_path, returned_path)
                 server_status = endpoint_response["serverStatus"]
                 if server_status != HTTPStatus.OK.value:
+                    self._last_endpoint_status[device_id, endpoint] = server_status
                     self._log_endpoint_status(endpoint, server_status)
                     continue
                 device_endpoint_response = endpoint_response["gatewayResponse"]
                 device_endpoint_response_status = device_endpoint_response["status"]
                 if device_endpoint_response_status != HTTPStatus.OK.value:
+                    self._last_endpoint_status[device_id, endpoint] = (
+                        device_endpoint_response_status
+                    )
                     self._log_endpoint_status(endpoint, device_endpoint_response_status)
                     continue
                 payload = device_endpoint_response["payload"]
                 self._server_error_counts.pop(endpoint, None)
+                self._last_endpoint_status.pop((device_id, endpoint), None)
                 result[endpoint] = payload
         except (KeyError, IndexError, TypeError):
             return None
