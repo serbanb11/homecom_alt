@@ -3877,14 +3877,48 @@ def test_log_endpoint_status_levels(caplog, status, expected_level) -> None:  # 
     Regression test for issue #143 (log spamming).
     """
     endpoint = "/resource/devices/dev1/roomtemperature"
+    bhc = HomeComAlt.__new__(HomeComAlt)
+    bhc._server_error_counts = {}
     with caplog.at_level("DEBUG", logger="homecom_alt.base"):
-        HomeComAlt._log_endpoint_status(endpoint, status)
+        bhc._log_endpoint_status(endpoint, status)
 
     records = [r for r in caplog.records if r.name == "homecom_alt.base"]
     assert len(records) == 1
     assert records[0].levelname == expected_level
     assert endpoint in records[0].getMessage()
     assert str(status) in records[0].getMessage()
+
+
+def test_log_endpoint_status_demotes_persistent_500(caplog) -> None:  # noqa: ANN001
+    """Consecutive 500s on one endpoint demote to debug after the threshold.
+
+    Some gateways answer optional endpoints (e.g. /resource/pool/* without a
+    pool) with a persistent 500 instead of 404, which used to produce one
+    warning per poll (hass#176). A different endpoint's counter is unaffected,
+    and a successful payload resets the counter via the bulk parser.
+    """
+    endpoint = "/resource/pool/temperature"
+    status = HTTPStatus.INTERNAL_SERVER_ERROR.value
+    bhc = HomeComAlt.__new__(HomeComAlt)
+    bhc._server_error_counts = {}
+
+    with caplog.at_level("DEBUG", logger="homecom_alt.base"):
+        for _ in range(5):
+            bhc._log_endpoint_status(endpoint, status)
+        # An unrelated endpoint still warns.
+        bhc._log_endpoint_status("/resource/other", status)
+
+    records = [r for r in caplog.records if r.name == "homecom_alt.base"]
+    levels = [r.levelname for r in records]
+    assert levels == ["WARNING"] * 3 + ["DEBUG"] * 2 + ["WARNING"]
+
+    # The bulk parser resets the counter on a successful payload; simulate the
+    # reset and confirm warnings resume.
+    bhc._server_error_counts.pop(endpoint, None)
+    caplog.clear()
+    with caplog.at_level("DEBUG", logger="homecom_alt.base"):
+        bhc._log_endpoint_status(endpoint, status)
+    assert caplog.records[-1].levelname == "WARNING"
 
 
 @pytest.mark.asyncio

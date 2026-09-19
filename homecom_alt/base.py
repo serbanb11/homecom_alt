@@ -76,6 +76,14 @@ _EXPECTED_ENDPOINT_STATUSES: frozenset[int] = frozenset(
     {HTTPStatus.FORBIDDEN.value, HTTPStatus.NOT_FOUND.value}
 )
 
+# Some gateways answer optional endpoints (e.g. /resource/pool/* on a unit
+# without a pool) with a persistent 500 instead of 404. After this many
+# consecutive 500s an endpoint's warnings demote to debug so a permanent
+# condition doesn't produce a warning per poll (hass#176). The endpoint keeps
+# being polled — unlike a 404 it is never cached away, because a run of 500s
+# can also be a recoverable cloud outage.
+_SERVER_ERROR_DEMOTE_THRESHOLD = 3
+
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -95,6 +103,7 @@ class HomeComAlt:
         self._oauth_refresh_params = OAUTH_REFRESH_PARAMS
         self._lock = asyncio.Lock()
         self._not_found_cache: dict[str, float] = {}
+        self._server_error_counts: dict[str, int] = {}
 
     @property
     def refresh_token(self) -> str | None:
@@ -188,24 +197,34 @@ class HomeComAlt:
                     self._log_endpoint_status(endpoint, device_endpoint_response_status)
                     continue
                 payload = device_endpoint_response["payload"]
+                self._server_error_counts.pop(endpoint, None)
                 result[endpoint] = payload
         except (KeyError, IndexError, TypeError):
             return None
         else:
             return result
 
-    @staticmethod
-    def _log_endpoint_status(endpoint: str, status: int) -> None:
+    def _log_endpoint_status(self, endpoint: str, status: int) -> None:
         """Log a non-OK per-endpoint bulk status.
 
         Expected statuses (403/404) for unsupported or forbidden resources are
         logged at debug level to avoid spamming the log; anything else is a
-        warning. See issue #143.
+        warning (see issue #143), except a 500 that keeps repeating for the
+        same endpoint, which demotes to debug after
+        _SERVER_ERROR_DEMOTE_THRESHOLD consecutive occurrences.
         """
         if status in _EXPECTED_ENDPOINT_STATUSES:
             _LOGGER.debug("Endpoint %s returned %s", endpoint, status)
-        else:
-            _LOGGER.warning("Endpoint %s returned %s", endpoint, status)
+            return
+        if status == HTTPStatus.INTERNAL_SERVER_ERROR.value:
+            count = self._server_error_counts.get(endpoint, 0) + 1
+            self._server_error_counts[endpoint] = count
+            if count > _SERVER_ERROR_DEMOTE_THRESHOLD:
+                _LOGGER.debug(
+                    "Endpoint %s returned %s (%s consecutive)", endpoint, status, count
+                )
+                return
+        _LOGGER.warning("Endpoint %s returned %s", endpoint, status)
 
     async def _async_http_request(  # noqa: PLR0912
         self,

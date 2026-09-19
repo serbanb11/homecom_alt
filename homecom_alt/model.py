@@ -43,7 +43,9 @@ class BHCDeviceK40:
     device: str | None
     firmware: list | None
     notifications: list | None
-    holiday_mode: list | None
+    # A /system/holidayModes bulk payload ({"values": [...], ...}) or None when
+    # the bulk response missed the endpoint — never a list (issue hass#176).
+    holiday_mode: dict | None
     away_mode: list | None
     power_limitation: list | None
     outdoor_temp: list | None
@@ -73,7 +75,7 @@ class BHCDeviceIcom:
     device: str | None
     firmware: list | None
     notifications: list | None
-    holiday_mode: list | None
+    holiday_mode: dict | None
     heat_sources: dict | None
     dhw_circuits: list | None
     heating_circuits: list | None
