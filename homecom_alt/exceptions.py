@@ -37,3 +37,25 @@ class MqttNotAuthorizedError(ApiError):
     hierarchy stops existing ``except AuthFailedError`` handlers from turning it
     into a spurious re-authentication request.
     """
+
+
+class ProximityRequiredError(BhcError):
+    """Raised when the K 40 RF Local API refuses a token for lack of proximity proof.
+
+    The gateway answers ``412 physical_proximity_unproven`` until the WLAN and
+    Wireless buttons have been pressed together, which opens a five-minute
+    window for the token request. This is deliberately **not** an
+    :class:`AuthFailedError`: the credentials may be perfectly correct and the
+    caller only has to prompt the user for a physical button press and retry, so
+    existing ``except AuthFailedError`` handlers must not turn it into a
+    re-authentication request.
+    """
+
+
+class TokenStoreFullError(BhcError):
+    """Raised when the gateway's token store cannot accept another token.
+
+    The gateway answers ``507`` once its token database is full. Recovery is to
+    revoke an unused token rather than to retry, so this is separated from the
+    generic :class:`ApiError`.
+    """

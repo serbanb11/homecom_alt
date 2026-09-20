@@ -21,16 +21,21 @@ from .exceptions import (
     InvalidSensorDataError,
     MqttNotAuthorizedError,
     NotRespondingError,
+    ProximityRequiredError,
+    TokenStoreFullError,
 )
 from .generic import HomeComGeneric
 from .icom import HomeComIcom
 from .k40 import HomeComK40
+from .local import HomeComK40Local
+from .localfirst import HomeComK40LocalFirst, K40Update
 from .model import (
     BHCDeviceBaconRac,
     BHCDeviceCommodule,
     BHCDeviceGeneric,
     BHCDeviceIcom,
     BHCDeviceK40,
+    BHCDeviceK40Local,
     BHCDeviceRac,
     BHCDeviceRrc2,
     BHCDeviceWddw2,
@@ -48,6 +53,7 @@ __all__ = [
     "BHCDeviceGeneric",
     "BHCDeviceIcom",
     "BHCDeviceK40",
+    "BHCDeviceK40Local",
     "BHCDeviceRac",
     "BHCDeviceRrc2",
     "BHCDeviceWddw2",
@@ -60,13 +66,18 @@ __all__ = [
     "HomeComGeneric",
     "HomeComIcom",
     "HomeComK40",
+    "HomeComK40Local",
+    "HomeComK40LocalFirst",
     "HomeComRac",
     "HomeComRrc2",
     "HomeComWddw2",
     "InvalidSensorDataError",
+    "K40Update",
     "MqttNotAuthorizedError",
     "NotRespondingError",
     "ParsedTopic",
+    "ProximityRequiredError",
+    "TokenStoreFullError",
     "async_get_bacon_devices",
     "decode_jwt_exp",
     "decode_jwt_sub",
