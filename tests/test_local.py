@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 
 import asyncio
+import hashlib
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ from aiohttp import (
     ClientError,
     ClientResponseError,
     ClientSession,
+    Fingerprint,
 )
 
 from homecom_alt import (
@@ -30,6 +32,7 @@ from homecom_alt.const import (
     LOCAL_AUTH_PORT,
     LOCAL_MAX_CONCURRENT,
     LOCAL_TIMEOUT,
+    LOCAL_UNSUPPORTED_TTL,
 )
 
 HOST = "192.0.2.10"
@@ -273,7 +276,7 @@ async def test_tls_verification_is_disabled() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN])
 async def test_absent_resource_is_cached_and_not_reprobed(status) -> None:  # noqa: ANN001
-    """A local 404/403 is structural, so it is remembered permanently."""
+    """A local 404/403 is remembered, so it is not probed on every poll."""
     session = ClientSession()
     client = HomeComK40Local(session, HOST, TOKEN)
     path = "/pool/currentTemp"
@@ -288,6 +291,96 @@ async def test_absent_resource_is_cached_and_not_reprobed(status) -> None:  # no
         # Second read must not produce another request.
         assert await client.async_get_resource(path) is None
         assert request.call_count == 1
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_absent_resource_is_reprobed_after_the_ttl() -> None:
+    """A boot-time 404 must not stay permanent: the path is tried again later."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST, TOKEN)
+    path = "/pool/currentTemp"
+
+    with (
+        patch.object(ClientSession, "request", new=AsyncMock()) as request,
+        patch("homecom_alt.local.time.monotonic") as monotonic,
+    ):
+        monotonic.return_value = 1000.0
+        request.side_effect = _http_error(HTTPStatus.NOT_FOUND)
+        assert await client.async_get_resource(path) is None
+
+        monotonic.return_value = 1000.0 + LOCAL_UNSUPPORTED_TTL - 1
+        assert await client.async_get_resource(path) is None
+        assert request.call_count == 1
+        assert path in client.unsupported
+
+        # Past the TTL the gateway is asked again, and this time it has it.
+        monotonic.return_value = 1000.0 + LOCAL_UNSUPPORTED_TTL + 1
+        assert path not in client.unsupported
+        request.side_effect = None
+        request.return_value = _resp(_float_value(path, 28.0))
+        assert await client.async_get_resource(path) == _float_value(path, 28.0)
+        assert request.call_count == 2
+        assert client.unsupported == ()
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_fingerprint_pins_the_gateway_certificate() -> None:
+    """With a fingerprint the certificate is pinned instead of unchecked."""
+    session = ClientSession()
+    digest = bytes(range(32))
+    client = HomeComK40Local(session, HOST, TOKEN, fingerprint=digest)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as request:
+        request.return_value = _resp(_string_value("/gateway/brand", "Bosch"))
+        await client.async_get_resource("/gateway/brand")
+
+        pinned = request.call_args.kwargs["ssl"]
+        assert isinstance(pinned, Fingerprint)
+        assert pinned.fingerprint == digest
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_certificate_fingerprint_is_read_from_the_auth_port() -> None:
+    """The digest of the presented certificate, for trust on first use."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST)
+    certificate = b"der-encoded-certificate"
+    writer = MagicMock()
+    writer.get_extra_info.return_value.getpeercert.return_value = certificate
+
+    with patch(
+        "homecom_alt.local.asyncio.open_connection",
+        new=AsyncMock(return_value=(MagicMock(), writer)),
+    ) as connect:
+        digest = await client.async_get_certificate_fingerprint()
+
+    assert digest == hashlib.sha256(certificate).digest()
+    assert connect.call_args.args == (HOST, LOCAL_AUTH_PORT)
+    writer.close.assert_called_once()
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_certificate_fingerprint_unreachable_gateway() -> None:
+    """A gateway that does not answer is reported like any other transport error."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST)
+
+    with (
+        patch(
+            "homecom_alt.local.asyncio.open_connection",
+            new=AsyncMock(side_effect=OSError("no route")),
+        ),
+        pytest.raises(NotRespondingError),
+    ):
+        await client.async_get_certificate_fingerprint()
 
     await session.close()
 
@@ -575,6 +668,48 @@ async def test_both_transports_succeed() -> None:
     assert update.local is LOCAL_DEVICE
     assert update.cloud is CLOUD_DEVICE
     assert update.local_healthy is True
+
+
+@pytest.mark.asyncio
+async def test_cancellation_does_not_orphan_the_other_transport() -> None:
+    """Cancelling an update cancels both reads instead of leaking one."""
+    started = asyncio.Event()
+    cancelled: list[str] = []
+
+    def _hang(name):  # noqa: ANN001, ANN202
+        async def _run(*_args):  # noqa: ANN002, ANN202
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.append(name)
+                raise
+
+        return _run
+
+    policy, _, _ = _local_first(_hang("local"), _hang("cloud"))
+    task = asyncio.create_task(policy.async_update("dev"))
+    await started.wait()
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert sorted(cancelled) == ["cloud", "local"]
+
+
+@pytest.mark.asyncio
+async def test_unexpected_local_error_propagates_after_cloud_finished() -> None:
+    """A bug in the local read surfaces, with the cloud read already collected."""
+    policy, _, cloud = _local_first([KeyError("boom")], [CLOUD_DEVICE])
+
+    with pytest.raises(KeyError):
+        await policy.async_update("dev")
+
+    cloud.async_update.assert_awaited_once()
+    # Not a transport failure, so it must not count against local health.
+    assert policy.local_failures == 0
 
 
 @pytest.mark.asyncio

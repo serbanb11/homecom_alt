@@ -48,6 +48,20 @@ _LOGGER = logging.getLogger(__name__)
 LOCAL_FAILURE_THRESHOLD = 3
 
 
+# Failures that mean "this transport did not deliver this cycle" rather than a
+# bug: they are counted and reported, never raised on their own.
+_TRANSPORT_ERRORS = (ApiError, NotRespondingError, RetryError, TimeoutError)
+
+
+def _as_bhc_error(error: BaseException) -> BhcError:
+    """Return ``error`` as a BhcError so callers handle one family."""
+    return error if isinstance(error, BhcError) else ApiError(str(error))
+
+
+async def _skipped() -> None:
+    """Stand in for the local read while the local transport is parked."""
+
+
 @dataclass(frozen=True)
 class K40Update:
     """The outcome of one local-first update cycle.
@@ -107,6 +121,40 @@ class HomeComK40LocalFirst:
         self._local_disabled = False
         self._local_failures = 0
 
+    def _record_local(
+        self, result: BHCDeviceK40Local | BaseException | None
+    ) -> tuple[BHCDeviceK40Local | None, BhcError | None]:
+        """Account for one local read and return ``(data, error)``."""
+        if isinstance(result, AuthFailedError):
+            # Park local reads: retrying a rejected token just produces the
+            # same 401 every poll.
+            self._local_disabled = True
+            _LOGGER.warning(
+                "Local gateway rejected the access token; falling back to the "
+                "cloud until a new token is provided"
+            )
+            return None, result
+        if isinstance(result, _TRANSPORT_ERRORS):
+            self._local_failures += 1
+            _LOGGER.debug(
+                "Local update failed (%s consecutive): %s",
+                self._local_failures,
+                result,
+            )
+            return None, _as_bhc_error(result)
+        if isinstance(result, BaseException):
+            raise result
+        if result is None:
+            # Local reads are parked.
+            return None, None
+        if self._local_failures:
+            _LOGGER.info(
+                "Local gateway recovered after %s failed attempts",
+                self._local_failures,
+            )
+        self._local_failures = 0
+        return result, None
+
     async def async_update(self, device_id: str) -> K40Update:
         """Update from both transports and report what succeeded.
 
@@ -118,53 +166,28 @@ class HomeComK40LocalFirst:
         came back, the caller has something to show and an outage should not turn
         into an unavailable device.
         """
-        local_task = (
-            asyncio.create_task(self._local.async_update())
-            if not self._local_disabled
-            else None
+        # gather(return_exceptions=True) rather than awaiting two tasks in turn:
+        # an unexpected error or a cancellation while waiting for the first one
+        # used to leave the other running with nobody to collect its result.
+        local_result, cloud_result = await asyncio.gather(
+            self._local.async_update() if not self._local_disabled else _skipped(),
+            self._cloud.async_update(device_id),
+            return_exceptions=True,
         )
-        cloud_task = asyncio.create_task(self._cloud.async_update(device_id))
 
-        local_data: BHCDeviceK40Local | None = None
-        local_error: BhcError | None = None
-        if local_task is not None:
-            try:
-                local_data = await local_task
-            except AuthFailedError as err:
-                # Park local reads: retrying a rejected token just produces the
-                # same 401 every poll.
-                self._local_disabled = True
-                local_error = err
-                _LOGGER.warning(
-                    "Local gateway rejected the access token; falling back to the "
-                    "cloud until a new token is provided"
-                )
-            except (ApiError, NotRespondingError, RetryError, TimeoutError) as err:
-                local_error = err if isinstance(err, BhcError) else ApiError(str(err))
-                self._local_failures += 1
-                _LOGGER.debug(
-                    "Local update failed (%s consecutive): %s",
-                    self._local_failures,
-                    err,
-                )
-            else:
-                if self._local_failures:
-                    _LOGGER.info(
-                        "Local gateway recovered after %s failed attempts",
-                        self._local_failures,
-                    )
-                self._local_failures = 0
+        local_data, local_error = self._record_local(local_result)
 
         cloud_data: BHCDeviceK40 | None = None
         cloud_error: BhcError | None = None
-        try:
-            cloud_data = await cloud_task
-        except AuthFailedError:
-            # Cloud auth is the caller's whole reason for existing; never mask it.
-            raise
-        except (ApiError, NotRespondingError, RetryError, TimeoutError) as err:
-            cloud_error = err if isinstance(err, BhcError) else ApiError(str(err))
-            _LOGGER.debug("Cloud update failed: %s", err)
+        if isinstance(cloud_result, _TRANSPORT_ERRORS):
+            cloud_error = _as_bhc_error(cloud_result)
+            _LOGGER.debug("Cloud update failed: %s", cloud_result)
+        elif isinstance(cloud_result, BaseException):
+            # Includes AuthFailedError: cloud auth is the caller's whole reason
+            # for existing, so it is never masked.
+            raise cloud_result
+        else:
+            cloud_data = cloud_result
 
         if local_data is None and cloud_data is None:
             raise cloud_error or local_error or ApiError("Both transports failed")

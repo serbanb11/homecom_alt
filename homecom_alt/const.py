@@ -410,6 +410,14 @@ LOCAL_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=8)
 # the primary mechanism.
 LOCAL_UPDATE_BUDGET: Final[float] = 30.0
 
+# How long a local 404/403 is remembered before the path is probed again. A
+# missing resource is usually structural ("this system has no pool"), but a
+# gateway also answers 404 for resources it has not discovered yet while it
+# scans the appliance bus after a reboot, and hardware can be added later. A
+# re-probe costs one ~17 ms request, so an hour keeps the cache useful without
+# making a boot-time 404 permanent until the consumer restarts.
+LOCAL_UNSUPPORTED_TTL: Final[float] = 3600.0
+
 # Resources polled on every local update, mirroring what the cloud K40 client
 # gathers plus the local-only extras (real electrical power, refrigerant
 # circuit, per-mode counters). Unsupported paths drop out after the first poll

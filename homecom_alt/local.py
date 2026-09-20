@@ -29,11 +29,19 @@ firewall problem.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import ssl
+import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-from aiohttp import ClientConnectorError, ClientError, ClientResponseError
+from aiohttp import (
+    ClientConnectorError,
+    ClientError,
+    ClientResponseError,
+    Fingerprint,
+)
 from tenacity import (
     after_log,
     retry,
@@ -52,6 +60,7 @@ from .const import (
     LOCAL_POLL_RESOURCES,
     LOCAL_SAMPLE_RATES,
     LOCAL_TIMEOUT,
+    LOCAL_UNSUPPORTED_TTL,
     LOCAL_UPDATE_BUDGET,
 )
 from .exceptions import (
@@ -77,7 +86,7 @@ _HTTP_PROXIMITY_REQUIRED = 412
 _HTTP_INSUFFICIENT_STORAGE = 507
 
 # Statuses that mean "this appliance does not have that resource". Tolerated on
-# reads and remembered, because unlike a cloud 404 this is structural.
+# reads and remembered for LOCAL_UNSUPPORTED_TTL.
 _UNSUPPORTED_STATUSES = frozenset(
     {HTTPStatus.FORBIDDEN.value, HTTPStatus.NOT_FOUND.value}
 )
@@ -101,20 +110,31 @@ class HomeComK40Local:
         token: str | None = None,
         *,
         device_id: str | None = None,
+        fingerprint: bytes | None = None,
     ) -> None:
         """Initialize.
 
         ``host`` is a hostname or IP without scheme or port. ``token`` is the
         never-expiring access token from :meth:`async_create_token`; it may be
         omitted while provisioning.
+
+        ``fingerprint`` is the SHA-256 digest of the gateway's certificate. The
+        certificate cannot be verified by hostname (see the module docstring),
+        but it can be *pinned*: with a fingerprint every request refuses a
+        gateway presenting a different certificate, which restores protection
+        against someone on the LAN impersonating it to collect the token.
+        Without one, requests are encrypted but unauthenticated, as before.
         """
         self._session = session
         self._host = host
         self._token = token
         self._device_id = device_id
+        self._ssl: Fingerprint | bool = (
+            Fingerprint(fingerprint) if fingerprint is not None else False
+        )
         self._semaphore = asyncio.Semaphore(LOCAL_MAX_CONCURRENT)
-        # Paths this appliance answered 404/403 for. Never re-probed.
-        self._unsupported: set[str] = set()
+        # Paths this appliance answered 404/403 for -> when (monotonic).
+        self._unsupported: dict[str, float] = {}
 
     @property
     def host(self) -> str:
@@ -133,8 +153,13 @@ class HomeComK40Local:
 
     @property
     def unsupported(self) -> tuple[str, ...]:
-        """Return the resource paths this appliance does not provide."""
-        return tuple(sorted(self._unsupported))
+        """Return the resource paths currently remembered as absent."""
+        return tuple(sorted(p for p in self._unsupported if self._is_unsupported(p)))
+
+    def _is_unsupported(self, path: str) -> bool:
+        """Whether ``path`` answered 404/403 within LOCAL_UNSUPPORTED_TTL."""
+        seen = self._unsupported.get(path)
+        return seen is not None and time.monotonic() - seen < LOCAL_UNSUPPORTED_TTL
 
     def _auth_url(self, endpoint: str) -> str:
         return f"https://{self._host}:{LOCAL_AUTH_PORT}{endpoint}"
@@ -174,8 +199,9 @@ class HomeComK40Local:
                 raise_for_status=True,
                 # See the module docstring: the certificate carries a device
                 # identifier instead of the hostname, so verification can never
-                # succeed. Do not change this to True.
-                ssl=False,
+                # succeed. Do not change this to True; pin a fingerprint
+                # instead (see __init__).
+                ssl=self._ssl,
             )
         except ClientResponseError as error:
             self._raise_for_response_error(error, url)
@@ -216,6 +242,36 @@ class HomeComK40Local:
         if status in (HTTPStatus.BAD_GATEWAY.value, HTTPStatus.GATEWAY_TIMEOUT.value):
             raise NotRespondingError(f"{url} returned {status}") from error
         raise ApiError(f"Invalid response from {url}: {status}") from error
+
+    async def async_get_certificate_fingerprint(self) -> bytes:
+        """Return the SHA-256 digest of the certificate the gateway presents.
+
+        For trust on first use: read it once while provisioning -- when the user
+        is standing at the gateway pressing its buttons -- store it, and pass it
+        back as ``fingerprint`` from then on. Read from :data:`LOCAL_AUTH_PORT`,
+        the only port that listens before the first token exists.
+        """
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        try:
+            async with asyncio.timeout(LOCAL_TIMEOUT.total):
+                _, writer = await asyncio.open_connection(
+                    self._host, LOCAL_AUTH_PORT, ssl=context
+                )
+        except (TimeoutError, OSError) as error:
+            raise NotRespondingError(
+                f"{self._host}:{LOCAL_AUTH_PORT} is not responding"
+            ) from error
+        try:
+            certificate = writer.get_extra_info("ssl_object").getpeercert(
+                binary_form=True
+            )
+        finally:
+            writer.close()
+        if not certificate:
+            raise ApiError("Gateway presented no certificate")
+        return hashlib.sha256(certificate).digest()
 
     # -- token management (LOCAL_AUTH_PORT) ---------------------------------
 
@@ -279,15 +335,17 @@ class HomeComK40Local:
     async def async_get_resource(self, path: str) -> dict | None:
         """Read one resource, or return ``None`` if this appliance lacks it.
 
-        Paths already known to be absent are skipped without a request.
+        Paths that answered 404/403 within :data:`LOCAL_UNSUPPORTED_TTL` are
+        skipped without a request.
         """
-        if path in self._unsupported:
+        if self._is_unsupported(path):
             _LOGGER.debug("Skipping unsupported resource %s", path)
             return None
         response = await self._request("get", self._api_url(path))
         if response is None:
-            self._unsupported.add(path)
+            self._unsupported[path] = time.monotonic()
             return None
+        self._unsupported.pop(path, None)
         if not isinstance(response, dict):
             raise ApiError(f"Unexpected payload for {path}")
         return response
