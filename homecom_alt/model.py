@@ -65,6 +65,36 @@ class BHCDeviceK40:
 
 
 @dataclass(frozen=True)
+class BHCDeviceK40Local:
+    """Data class for a K40 read over the K 40 RF Local API (LAN, read-only).
+
+    ``resources`` maps a resource path to the gateway's payload, e.g.
+    ``{"/dhwCircuits/dhw1/actualTemp": {"id": ..., "type": "floatValue",
+    "writeable": 0, "value": 55.6, "unitOfMeasure": "C"}}``. Paths the appliance
+    does not have are absent rather than present-and-``None``, so a caller can
+    tell "not supported" from "supported but no value".
+
+    ``unsupported`` lists the paths the gateway answered ``404``/``403`` for, so
+    a consumer can see which families this particular system lacks without
+    re-probing.
+
+    The Local API is read-only and exposes no ``operationMode`` resource, so
+    ``dhw_mode``/``hc_status`` are *derived* from ``overallStatus`` — see
+    ``LOCAL_DHW_STATUS_TO_MODE``. ``dhw_mode`` is ``None`` when the status has no
+    mapping (``away``, ``holiday``, ``extra``, ``td``, ``floor_drying``,
+    ``dhw_disabled``), which a caller should treat as "cannot be represented as a
+    mode" rather than as off.
+    """
+
+    device: str | None
+    firmware: str | None
+    resources: dict[str, dict]
+    unsupported: tuple[str, ...] = ()
+    dhw_mode: str | None = None
+    hc_status: str | None = None
+
+
+@dataclass(frozen=True)
 class BHCDeviceIcom:
     """Data class for icom heat-pump BHC device.
 

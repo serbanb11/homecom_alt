@@ -362,3 +362,132 @@ BACON_USER_AGENT: Final[str] = "DashApp/4.0.0 (Android-Release)"
 BACON_DEFAULT_REGION: Final[str] = "euc1"
 BACON_KNOWN_REGIONS: Final[tuple[str, ...]] = ("euc1", "use1")
 BACON_HOST_TEMPLATE: Final[str] = "{service}.{region}.bacon.bosch-tt-cw.com"
+
+
+# --- K 40 RF Local API (LAN, read-only) -------------------------------------
+# Documented at https://github.com/bosch-home-comfort/api-docs
+# Verified against a K 40 RF on firmware 15.00.01 (Compress CS5800iAW 12).
+
+# The gateway serves authentication and resources on two different ports. A
+# working token request on LOCAL_AUTH_PORT says nothing about connectivity to
+# LOCAL_API_PORT.
+LOCAL_AUTH_PORT: Final[int] = 9442
+LOCAL_API_PORT: Final[int] = 9443
+
+# mDNS service used to discover gateways on the LAN. The TXT record carries
+# txtvers, authport, model, brand, uuid, serial, auth_version and base_url; the
+# uuid equals the cloud gatewayId, so a discovered gateway can be matched to an
+# existing cloud config entry.
+LOCAL_ZEROCONF_TYPE: Final[str] = "_hvac-open-api._tcp.local."
+
+LOCAL_ENDPOINT_TOKEN: Final[str] = "/auth/token"  # noqa: S105 - URL path, not a secret
+LOCAL_ENDPOINT_REVOKE: Final[str] = "/auth/revoke"
+
+# Minimum gateway firmware exposing the Local API.
+LOCAL_MIN_FIRMWARE: Final[str] = "15.00.01"
+
+# The gateway serialises requests internally. Measured on a 44-resource poll:
+# sequential 2.32 s (52 ms median per GET), 2 workers 1.53 s (66 ms), 4 workers
+# 1.53 s but 134 ms per GET, 8 workers 2.18 s with a 1819 ms outlier. Beyond two
+# workers per-request latency grows faster than wall-clock improves, so keep
+# this at 2.
+LOCAL_MAX_CONCURRENT: Final[int] = 2
+
+# A local 404 is structural ("this system has no pool"), not transient like a
+# cloud 404, so it is cached for the lifetime of the client rather than for a
+# TTL.
+LOCAL_RESOURCE_NOT_FOUND: Final[str] = "__not_found__"
+
+# A gateway on the LAN answers in ~50 ms (measured p90 77 ms), so the 15 s cloud
+# default is far too generous here: it only delays discovering that the gateway
+# has gone away. 8 s still tolerates a badly congested network.
+LOCAL_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=8)
+
+# Hard ceiling on one full poll. Without it an unreachable gateway costs
+# (resources / concurrency) x timeout before failing -- for the default poll set
+# that is several minutes, which would stall a consumer's update cycle. The poll
+# also fails fast on the first transport error, so this is a backstop rather than
+# the primary mechanism.
+LOCAL_UPDATE_BUDGET: Final[float] = 30.0
+
+# Resources polled on every local update, mirroring what the cloud K40 client
+# gathers plus the local-only extras (real electrical power, refrigerant
+# circuit, per-mode counters). Unsupported paths drop out after the first poll
+# via the 404 cache, so this list can stay generous.
+LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
+    # gateway / system identity
+    "/gateway/versionFirmware",
+    "/gateway/brand",
+    "/system/type",
+    "/system/bus",
+    "/notifications",
+    # outdoor / system sensors
+    "/system/sensors/temperatures/outdoor_t1",
+    "/system/powerLimitation/active",
+    "/system/powerConstraints/silentMode/status",
+    # heat sources (aggregate)
+    "/heatSources/actualHeatDemand",
+    "/heatSources/actualModulation",
+    "/heatSources/actualSupplyTemperature",
+    "/heatSources/returnTemperature",
+    "/heatSources/currentSupplySetpoint",
+    "/heatSources/systemPressure",
+    "/heatSources/numberOfStarts",
+    "/heatSources/workingTime/totalSystem",
+    "/heatSources/flameStatus",
+    "/heatSources/emStatus",
+    "/heatSources/dhw/cylinderTemperature",
+    "/heatSources/Source/eHeater/status",
+    # heat sources: local-only electrical power
+    "/heatSources/compressor/powerElecActual",
+    "/heatSources/eHeater/powerElecActual",
+    "/heatSources/additionalHeater/flowTemp",
+    # energy monitoring
+    "/heatSources/emon/chConsumption",
+    "/heatSources/emon/dhwConsumption",
+    "/heatSources/emon/totalConsumption",
+    # heat source hs1: per-mode counters + refrigerant circuit
+    "/heatSources/hs1/heatPumpType",
+    "/heatSources/hs1/numberOfStarts",
+    "/heatSources/hs1/workingTime",
+    "/heatSources/hs1/oduFanSpeed",
+    "/heatSources/hs1/pumpVolumeFlow",
+    "/heatSources/hs1/refrigerant/status",
+    "/heatSources/hs1/refrigerant/compressorActualSpeed",
+    "/heatSources/hs1/refrigerant/compressorElecPowerActual",
+    "/heatSources/hs1/refrigerant/compressorTemp",
+    "/heatSources/hs1/refrigerant/hotGasTemp",
+    "/heatSources/hs1/refrigerant/suctionGasTemp",
+    "/heatSources/hs1/refrigerant/highPressureTemp",
+    "/heatSources/hs1/refrigerant/lowPressureTemp",
+    "/heatSources/hs1/supplyFlowCondenserTemp",
+    # domestic hot water
+    "/dhwCircuits/dhw1/actualTemp",
+    "/dhwCircuits/dhw1/currentSetpoint",
+    "/dhwCircuits/dhw1/currentTemperatureLevel",
+    "/dhwCircuits/dhw1/overallStatus",
+    "/dhwCircuits/dhw1/chargeRemainingTime",
+    "/dhwCircuits/dhw1/tdrunningStatus",
+    # heating circuit
+    "/heatingCircuits/hc1/overallStatus",
+    "/heatingCircuits/hc1/currentRoomSetpoint",
+    "/heatingCircuits/hc1/currentSuWiMode",
+    "/heatingCircuits/hc1/maxFlowTemp",
+    "/heatingCircuits/hc1/pumpStatus",
+)
+
+# DHW mode is not a resource on the Local API: there is no
+# /dhwCircuits/{id}/operationMode. It can only be derived from overallStatus,
+# whose values map onto the cloud operationMode vocabulary as follows. Verified
+# by driving the mode through the cloud and observing the local resource.
+LOCAL_DHW_STATUS_TO_MODE: Final[dict[str, str]] = {
+    "manual_off": "Off",
+    "manual_on_eco": "eco",
+    "manual_on_low": "low",
+    "manual_on_high": "high",
+    "auto": "ownprogram",
+}
+
+# Recording sample rates are exact, case-sensitive ISO-8601 duration tokens.
+# "1h" is rejected with 400.
+LOCAL_SAMPLE_RATES: Final[tuple[str, ...]] = ("PT1H", "P1D", "P1M", "all")
