@@ -970,6 +970,20 @@ async def test_async_action_universal_get() -> None:
     await session.close()
 
 
+@pytest.mark.asyncio
+async def test_async_action_universal_put() -> None:
+    """Test async_action_universal_put writes endpoint value."""
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=False)
+
+    with patch.object(bhc, "_async_http_request", new=AsyncMock()) as mock_req:
+        await bhc.async_action_universal_put(DEVICE_ID, "/some/path", 21)
+        assert mock_req.await_args.args[0] == "put"
+        assert mock_req.await_args.args[2] == {"value": 21}
+
+    await session.close()
+
+
 # ===========================================================================
 # HomeComGeneric
 # ===========================================================================
