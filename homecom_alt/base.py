@@ -625,3 +625,15 @@ class HomeComAlt:
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS + device_id + path,
         )
         return await self._to_data(response)
+
+    async def async_action_universal_put(
+        self, device_id: str, path: str, value: Any
+    ) -> None:
+        """Write any endpoint's ``value`` field."""
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS + device_id + path,
+            {"value": value},
+            1,
+        )
