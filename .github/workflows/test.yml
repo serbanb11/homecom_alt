@@ -24,6 +24,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Check lockfile is up to date
+        if: matrix.python-version == '3.12'
+        run: uv lock --check
+
       - name: Install dependencies
         run: uv sync --group dev --python ${{ matrix.python-version }}
 

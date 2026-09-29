@@ -42,7 +42,7 @@ uv run coverage report --fail-under=40   # Coverage check (40% minimum threshold
 
 ### Run All Checks
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy homecom_alt && uv run pytest --timeout=30 --cov=homecom_alt tests/ && uv run coverage report --fail-under=40
+uv lock --check && uv run ruff check . && uv run ruff format --check . && uv run mypy homecom_alt && uv run pytest --timeout=30 --cov=homecom_alt tests/ && uv run coverage report --fail-under=40
 ```
 
 ## Architecture
