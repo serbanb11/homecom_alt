@@ -1768,9 +1768,7 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_hc_temp_level_comfort2(
-        self, device_id: str, hc_id: str
-    ) -> Any:
+    async def async_get_hc_temp_level_comfort2(self, device_id: str, hc_id: str) -> Any:
         """Get hc comfort2 temperature level."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1836,9 +1834,7 @@ class HomeComK40(HomeComAlt):
             1,
         )
 
-    async def async_get_hc_actual_supply_temp(
-        self, device_id: str, hc_id: str
-    ) -> Any:
+    async def async_get_hc_actual_supply_temp(self, device_id: str, hc_id: str) -> Any:
         """Get hc actual supply temperature."""
         await self.get_token()
         response = await self._async_http_request(
@@ -1852,7 +1848,6 @@ class HomeComK40(HomeComAlt):
             + BOSCHCOM_ENDPOINT_HC_ACTUAL_SUPPLY_TEMP,
         )
         return await self._to_data(response)
-
 
     async def async_get_hc_min_supply(self, device_id: str, hc_id: str) -> Any:
         """Get hc min supply temperature."""
