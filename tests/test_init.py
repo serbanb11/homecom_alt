@@ -970,6 +970,20 @@ async def test_async_action_universal_get() -> None:
     await session.close()
 
 
+@pytest.mark.asyncio
+async def test_async_action_universal_put() -> None:
+    """Test async_action_universal_put writes endpoint value."""
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=False)
+
+    with patch.object(bhc, "_async_http_request", new=AsyncMock()) as mock_req:
+        await bhc.async_action_universal_put(DEVICE_ID, "/some/path", 21)
+        assert mock_req.await_args.args[0] == "put"
+        assert mock_req.await_args.args[2] == {"value": 21}
+
+    await session.close()
+
+
 # ===========================================================================
 # HomeComGeneric
 # ===========================================================================
@@ -2264,6 +2278,11 @@ async def test_k40_hc_new_getters() -> None:
     for method_name in (
         "async_get_hc_max_supply",
         "async_get_hc_min_supply",
+        "async_get_hc_max_flow_temp",
+        "async_get_hc_suwi_threshold",
+        "async_get_hc_temp_level_comfort2",
+        "async_get_hc_temp_level_eco",
+        "async_get_hc_actual_supply_temp",
         "async_get_hc_heat_curve_max",
         "async_get_hc_heat_curve_min",
         "async_get_hc_supply_temp_setpoint",
@@ -2292,6 +2311,11 @@ async def test_k40_hc_new_setters() -> None:
     setters = (
         ("async_set_hc_max_supply", "90"),
         ("async_set_hc_min_supply", "20"),
+        ("async_set_hc_max_flow_temp", 38),
+        ("async_set_hc_suwi_threshold", 19),
+        ("async_set_hc_temp_level_comfort2", 21),
+        ("async_set_hc_temp_level_eco", 20),
+        ("async_put_hc_control_type", "wdcsimplified"),
         ("async_set_hc_heat_curve_max", "75"),
         ("async_set_hc_heat_curve_min", "20"),
         ("async_set_hc_night_switch_mode", "on"),
