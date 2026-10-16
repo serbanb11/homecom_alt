@@ -19,6 +19,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_MODE,
     BOSCHCOM_ENDPOINT_NOTIFICATIONS,
     BOSCHCOM_ENDPOINT_PLASMACLUSTER,
+    BOSCHCOM_ENDPOINT_SETBACK_MODE,
     BOSCHCOM_ENDPOINT_STANDARD,
     BOSCHCOM_ENDPOINT_SWITCH,
     BOSCHCOM_ENDPOINT_SWITCH_ENABLE,
@@ -248,6 +249,21 @@ class HomeComRac(HomeComAlt):
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
             + BOSCHCOM_ENDPOINT_PLASMACLUSTER,
+            {"value": bool_to_status[mode]},
+            1,
+        )
+
+    async def async_set_setback_mode(self, device_id: str, mode: bool) -> None:
+        """Control setback mode, the 10 °C / 8 °C frost-protection heating."""
+        await self.get_token()
+        bool_to_status = {True: "on", False: "off"}
+
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_SETBACK_MODE,
             {"value": bool_to_status[mode]},
             1,
         )

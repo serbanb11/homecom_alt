@@ -1185,6 +1185,33 @@ async def test_rac_set_plasmacluster_true() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rac_set_setback_mode_true() -> None:
+    """Test RAC set setback mode to on when True."""
+    session = ClientSession()
+    rac = _make_rac(session)
+
+    with patch.object(rac, "_async_http_request", new=AsyncMock()) as mock_req:
+        await rac.async_set_setback_mode(DEVICE_ID, True)  # noqa: FBT003
+        assert mock_req.call_args[0][1].endswith("/airConditioning/setbackMode")
+        assert mock_req.call_args[0][2] == {"value": "on"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rac_set_setback_mode_false() -> None:
+    """Test RAC set setback mode to off when False."""
+    session = ClientSession()
+    rac = _make_rac(session)
+
+    with patch.object(rac, "_async_http_request", new=AsyncMock()) as mock_req:
+        await rac.async_set_setback_mode(DEVICE_ID, False)  # noqa: FBT003
+        assert mock_req.call_args[0][2] == {"value": "off"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_rac_set_plasmacluster_false() -> None:
     """Test RAC set plasmacluster to off when False."""
     session = ClientSession()

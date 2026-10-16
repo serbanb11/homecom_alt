@@ -91,6 +91,9 @@ BOSCHCOM_ENDPOINT_AIRFLOW_HORIZONTAL: Final[str] = (
 BOSCHCOM_ENDPOINT_PLASMACLUSTER: Final[str] = (
     "/resource/airConditioning/airPurificationMode"
 )
+# 10 °C (Sharp-built) / 8 °C (Midea-built) frost-protection heating; the
+# HomeCom app lists it with the other advanced functions.
+BOSCHCOM_ENDPOINT_SETBACK_MODE: Final[str] = "/resource/airConditioning/setbackMode"
 BOSCHCOM_ENDPOINT_AWAY_MODE: Final[str] = "/resource/system/awayMode/enabled"
 BOSCHCOM_ENDPOINT_SILENT_MODE: Final[str] = "/resource/system/silentMode/enabled"
 BOSCHCOM_ENDPOINT_POWER_LIMITATION: Final[str] = (
