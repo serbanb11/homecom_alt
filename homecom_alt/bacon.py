@@ -579,16 +579,24 @@ class BaconMqttClient:
         self._notify_raw(parsed, payload)
 
         if parsed.channel == "shadows" and parsed.serial is not None:
-            self._handle_shadow(parsed.serial, topic, payload)
+            self._handle_shadow(parsed.serial, parsed.path, payload)
 
-    def _handle_shadow(self, serial: str, topic: str, payload: Any) -> None:
-        """Resolve a pending get and fan a shadow change out to its listeners."""
-        if topic.endswith("/get/rejected"):
+    def _handle_shadow(self, serial: str, path: str, payload: Any) -> None:
+        """Resolve a pending get and fan a shadow change out to its listeners.
+
+        Only the ``state`` shadow takes part. The wildcard subscription also
+        delivers the ``schedule`` and ``$package`` shadows of the same device;
+        matching on the ``get/accepted`` suffix alone let whichever of them
+        replied first answer a pending *state* read with the wrong document
+        (hass#203), and pushed their ``update/accepted`` into the state
+        listeners. Those shadows are still cached and handed to raw listeners.
+        """
+        if path == "state/get/rejected":
             self._resolve_get(serial, exc=ApiError(f"Shadow get rejected for {serial}"))
             return
 
-        is_get = topic.endswith("/get/accepted")
-        is_update = topic.endswith("/update/accepted")
+        is_get = path == "state/get/accepted"
+        is_update = path == "state/update/accepted"
         if not (is_get or is_update):
             return
 

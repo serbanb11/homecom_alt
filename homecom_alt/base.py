@@ -340,6 +340,13 @@ class HomeComAlt:
             "get",
             BOSCHCOM_DOMAIN + BOSCHCOM_ENDPOINT_GATEWAYS,
         )
+        if not response:
+            # A refused (403/404) or unavailable (502/504) listing comes back as
+            # {} rather than a response. An account with only Matter-commissioned
+            # devices has no pointt gateway to list, so that is an empty listing,
+            # not a crash on .json() that locks the account out (hass#203).
+            _LOGGER.debug("Gateway listing unavailable, treating it as empty")
+            return []
         try:
             return response.json()
         except ValueError as error:

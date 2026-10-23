@@ -795,6 +795,23 @@ async def test_async_get_devices_success() -> None:
     await session.close()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refused", [{}, None])
+async def test_async_get_devices_refused_listing_is_empty(refused: object) -> None:
+    """A 403/404/502/504 listing ({} or None) is an empty listing, not a crash.
+
+    Regression for hass#203: a Matter-only account has no pointt gateway and
+    used to die with AttributeError on .json() before bacon discovery ran.
+    """
+    session = ClientSession()
+    bhc = HomeComAlt(session, _make_options(), auth_provider=False)
+
+    with patch.object(bhc, "_async_http_request", new=AsyncMock(return_value=refused)):
+        assert await bhc.async_get_devices() == []
+
+    await session.close()
+
+
 # ===========================================================================
 # Simple base-class getters
 # ===========================================================================

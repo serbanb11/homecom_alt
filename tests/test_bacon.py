@@ -586,6 +586,85 @@ async def test_topics_message_does_not_resolve_a_shadow_get(
 
 
 @pytest.mark.asyncio
+async def test_other_shadows_do_not_resolve_a_state_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A schedule or $package get/accepted must not answer a state get (hass#203).
+
+    The device has three shadows and the wildcard subscription delivers all of
+    them; the first get/accepted for the serial used to win the race.
+    """
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    await asyncio.sleep(0)
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/schedule/get/accepted",
+        {"state": {"reported": {"schedules": "H4sI...", "tz": "CET", "idx": 1}}},
+    )
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/$package/get/accepted",
+        {"state": {"reported": {"ap_blwp_v1": {"version": "1.0"}}}},
+    )
+    await asyncio.sleep(0)
+    assert not task.done()
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+        {"state": {"reported": {"powerEnabled": True}, "desired": {}}},
+    )
+    assert await task == {"reported": {"powerEnabled": True}, "desired": {}}
+
+
+@pytest.mark.asyncio
+async def test_other_shadows_do_not_reach_state_listeners(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A schedule update is not a state change; raw listeners still see it."""
+    client = await _connected_client(monkeypatch)
+    states: list[dict] = []
+    raw: list[str] = []
+    client.register_listener("86DM-1", states.append)
+    client.register_raw_listener(lambda _s, path, _payload: raw.append(path))
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/schedule/update/accepted",
+        {"state": {"reported": {"idx": 2}}},
+    )
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/update/accepted",
+        {"state": {"reported": {"powerEnabled": False}}},
+    )
+    await asyncio.sleep(0)
+
+    assert states == [{"reported": {"powerEnabled": False}, "desired": {}}]
+    assert "shadows/schedule/update/accepted" in raw
+
+
+@pytest.mark.asyncio
+async def test_other_shadow_get_rejected_does_not_fail_a_state_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected schedule get leaves the pending state read untouched."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    await asyncio.sleep(0)
+
+    _deliver(client, "users/sub-1/devices/86DM-1/shadows/schedule/get/rejected", {})
+    await asyncio.sleep(0)
+    assert not task.done()
+
+    _deliver(client, "users/sub-1/devices/86DM-1/shadows/state/get/rejected", {})
+    with pytest.raises(ApiError):
+        await task
+
+
+@pytest.mark.asyncio
 async def test_async_set_feature_publishes_desired() -> None:
     """async_set_feature publishes the boolean field to the shadow's desired."""
     client = AsyncMock()
