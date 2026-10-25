@@ -579,6 +579,12 @@ async def test_update_returns_device_with_derived_mode() -> None:
             return _resp(_string_value("x", "manual_on_eco"))
         if url.endswith("/heatingCircuits/hc1/overallStatus"):
             return _resp(_string_value("x", "heating_manual_off"))
+        if url.endswith("/heatingCircuits/hc2/pumpStatus"):
+            return _resp(_string_value("x", "on"))
+        if url.endswith("/heatingCircuits/hc3/pumpStatus"):
+            raise _http_error(HTTPStatus.NOT_FOUND)
+        if url.endswith("/heatingCircuits/hc4/pumpStatus"):
+            return _resp(_string_value("x", "off"))
         if url.endswith("/gateway/versionFirmware"):
             return _resp(_string_value("x", "15.00.01"))
         return _resp(_float_value("x", 1.0))
@@ -594,6 +600,10 @@ async def test_update_returns_device_with_derived_mode() -> None:
     assert device.resources["/dhwCircuits/dhw1/overallStatus"]["value"] == (
         "manual_on_eco"
     )
+    assert device.resources["/heatingCircuits/hc2/pumpStatus"]["value"] == "on"
+    assert "/heatingCircuits/hc3/pumpStatus" not in device.resources
+    assert "/heatingCircuits/hc3/pumpStatus" in device.unsupported
+    assert device.resources["/heatingCircuits/hc4/pumpStatus"]["value"] == "off"
 
     await session.close()
 
