@@ -21,6 +21,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL,
     BOSCHCOM_ENDPOINT_GATEWAYS,
     BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM,
+    BOSCHCOM_ENDPOINT_HC_ACTUAL_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE,
     BOSCHCOM_ENDPOINT_HC_COOLING_ROOM_TEMP_SETPOINT,
     BOSCHCOM_ENDPOINT_HC_CURRENT_ROOM_SETPOINT,
@@ -389,6 +390,9 @@ class HomeComIcom(HomeComK40):
                     prefix + BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_MODE,
                     prefix + BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_A,
                     prefix + BOSCHCOM_ENDPOINT_HC_SWITCH_PROGRAM_B,
+                    # Per-circuit flow temperature (hass#207); the bulk simply
+                    # omits it on a circuit without a sensor.
+                    prefix + BOSCHCOM_ENDPOINT_HC_ACTUAL_SUPPLY_TEMP,
                 ]
                 hc_bulk = await self.async_request_bulk(device_id, hc_endpoints) or {}
                 ref["operationMode"] = hc_bulk.get(
@@ -396,6 +400,9 @@ class HomeComIcom(HomeComK40):
                 )
                 ref["controlType"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_CONTROL_TYPE
+                )
+                ref["actualSupplyTemp"] = hc_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_HC_ACTUAL_SUPPLY_TEMP
                 )
                 ref["currentSuWiMode"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_SUWI_MODE

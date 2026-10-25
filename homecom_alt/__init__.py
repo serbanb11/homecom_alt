@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from .bacon import (
     BaconMqttClient,
+    HomeComBaconAp,
+    HomeComBaconDevice,
     HomeComBaconRac,
     ParsedTopic,
+    async_classify_bacon_device,
     async_get_bacon_devices,
+    classify_bacon_device,
     decode_jwt_exp,
     decode_jwt_sub,
     generate_client_id,
@@ -30,6 +34,7 @@ from .k40 import HomeComK40
 from .local import HomeComK40Local
 from .localfirst import HomeComK40LocalFirst, K40Update
 from .model import (
+    BHCDeviceBacon,
     BHCDeviceBaconRac,
     BHCDeviceCommodule,
     BHCDeviceGeneric,
@@ -48,6 +53,7 @@ from .wddw2 import HomeComWddw2
 __all__ = [
     "ApiError",
     "AuthFailedError",
+    "BHCDeviceBacon",
     "BHCDeviceBaconRac",
     "BHCDeviceCommodule",
     "BHCDeviceGeneric",
@@ -61,6 +67,8 @@ __all__ = [
     "BhcError",
     "ConnectionOptions",
     "HomeComAlt",
+    "HomeComBaconAp",
+    "HomeComBaconDevice",
     "HomeComBaconRac",
     "HomeComCommodule",
     "HomeComGeneric",
@@ -78,7 +86,9 @@ __all__ = [
     "ParsedTopic",
     "ProximityRequiredError",
     "TokenStoreFullError",
+    "async_classify_bacon_device",
     "async_get_bacon_devices",
+    "classify_bacon_device",
     "decode_jwt_exp",
     "decode_jwt_sub",
     "generate_client_id",

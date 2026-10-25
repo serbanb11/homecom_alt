@@ -359,6 +359,11 @@ MAX_BULK_ENDPOINTS: Final[int] = 30
 
 # --- Bacon (Matter-commissioned) backend: MQTT device-shadow ----------------
 BACON_RAC_TYPE: Final[str] = "bacon_rac"
+# Air purifiers (Air 4000i and relatives) share the bacon backend and protocol.
+# Discovery returns bare serials, so this type is only known after connecting
+# and reading ``topics/info`` (see ``bacon.classify_bacon_device``).
+BACON_AP_TYPE: Final[str] = "bacon_ap"
+BACON_DEVICE_TYPES: Final[tuple[str, ...]] = (BACON_RAC_TYPE, BACON_AP_TYPE)
 BACON_MQTT_PORT: Final[int] = 443
 BACON_WS_PATH: Final[str] = "/mqtt"
 BACON_USER_AGENT: Final[str] = "DashApp/4.0.0 (Android-Release)"

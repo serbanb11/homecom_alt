@@ -23,22 +23,34 @@ pip install homecom_alt
 | `wddw2` | `HomeComWddw2` | `BHCDeviceWddw2` |
 | `commodule` | `HomeComCommodule` | `BHCDeviceCommodule` |
 | `generic` | `HomeComGeneric` | `BHCDeviceGeneric` |
-| `bacon_rac` | `HomeComBaconRac` | `BHCDeviceBaconRac` |
+| `bacon_rac` | `HomeComBaconRac` | `BHCDeviceBacon` |
+| `bacon_ap` | `HomeComBaconAp` | `BHCDeviceBacon` |
 
-### Matter-commissioned ACs (Bacon)
+### Matter-commissioned ACs and air purifiers (Bacon)
 
-Bosch Climate ACs commissioned **over Matter** in the HomeCom Easy app (serials
-like `86DM-580-…`) are not pointt gateways, so they never appear in
-`HomeComAlt.async_get_devices()`. They are managed by Bosch's *bacon* backend and
-controlled through an AWS-IoT-style **device shadow over MQTT 5 (WebSocket)**,
-which requires the extra `paho-mqtt` dependency (installed automatically).
+Bosch Climate ACs and Air 4000i-class air purifiers commissioned **over Matter**
+in the HomeCom Easy app (serials like `86DM-580-…`) are not pointt gateways, so
+they never appear in `HomeComAlt.async_get_devices()`. They are managed by
+Bosch's *bacon* backend and controlled through an AWS-IoT-style **device shadow
+over MQTT 5 (WebSocket)**, which requires the extra `paho-mqtt` dependency
+(installed automatically).
 
 - Discover them with `async_get_bacon_devices(session, token, region)` — returns
   the same `{"deviceId", "deviceType": "bacon_rac"}` shape as the REST discovery.
-- Open one shared `BaconMqttClient` per account (`async_connect(token, sub)`),
-  then wrap each serial in a `HomeComBaconRac` for `async_update()` and the
-  `async_set_power` / `async_set_mode` / `async_set_temperature` / `async_set_fan`
-  / `async_set_swing` controls.
+  The claiming endpoint hands out bare serials, so every device is typed
+  `bacon_rac` at this point.
+- Open one shared `BaconMqttClient` per account (`async_connect(token, sub)`).
+- Tell the families apart with `await async_classify_bacon_device(client, serial)`
+  → `"bacon_rac"` or `"bacon_ap"`. It reads `topics/info.appliance.type` the way
+  the app does, falling back to the `$package` shadow and the state shadow.
+- Wrap each serial in `HomeComBaconRac` (`async_set_power` / `async_set_mode` /
+  `async_set_temperature` / `async_set_fan` / `async_set_swing` /
+  `async_set_feature`) or `HomeComBaconAp` (`async_set_power` / `async_set_mode`
+  with `auto`/`manual`/`silent`, `async_set_fan_speed` — which also selects
+  `manual`, as the app only offers a speed there —, `async_set_timer`,
+  `async_set_feature` for child lock / light / display, `async_reset_filter`).
+  Both expose `async_update()` plus the push-only `sensor` / `metadata` / `info`.
+- `async_get_shadow(serial, "schedule" | "$package")` reads the other shadows.
 - The region defaults to `euc1` (eu-central-1); `use1` also exists.
 
 ## Authentication

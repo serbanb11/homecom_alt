@@ -1,10 +1,16 @@
-"""Support for Bosch HomeCom Matter/"Bacon"-commissioned RAC air conditioners.
+"""Support for Bosch HomeCom Matter/"Bacon"-commissioned devices.
 
 These units (serial numbers like ``86DM-580-...``) are commissioned through the
 HomeCom Easy app over Matter and are managed by Bosch's *bacon* backend. They do
 **not** appear in the classic pointt ``/gateways/`` listing, so the REST device
 classes in this library never see them. Instead they are read and controlled via
 an AWS-IoT-style **device shadow** exposed over MQTT 5 (WebSocket).
+
+Two appliance families speak this protocol: Midea-based RAC air conditioners
+(:class:`HomeComBaconRac`) and Air 4000i-class air purifiers
+(:class:`HomeComBaconAp`). The claiming endpoint hands out bare serials, so which
+one a serial is can only be told after connecting — see
+:func:`async_classify_bacon_device`.
 
 Protocol (reverse-engineered from HomeCom Easy 4.0.0, verified live):
 
@@ -52,6 +58,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import paho.mqtt.client as mqtt
 
 from .const import (
+    BACON_AP_TYPE,
     BACON_DEFAULT_REGION,
     BACON_HOST_TEMPLATE,
     BACON_MQTT_PORT,
@@ -81,6 +88,27 @@ _TOPICS_CHANNEL = "topics"
 _TOPIC_SENSOR = "sensor"
 _TOPIC_META = "meta"
 _TOPIC_INFO = "info"
+
+# Request/response channel: the device's three shadows. Only ``state`` is fanned
+# out to shadow listeners; the others are read on demand.
+_SHADOWS_CHANNEL = "shadows"
+SHADOW_STATE = "state"
+SHADOW_SCHEDULE = "schedule"
+SHADOW_PACKAGE = "$package"
+
+# ``topics/info.appliance.type`` prefixes the HomeCom Easy app (BaconDeviceModel)
+# recognises as an air purifier: air_4000i, air_4001i, air_4000i_v2, Air 6000i …
+_AP_APPLIANCE_PREFIXES = ("air_", "air ")
+# ``$package`` shadow keys name the firmware package: ``ap_blwp_v1`` on an
+# Air 4000i, ``rac_midea_v1``/``rac_midea_v2`` on the ACs.
+_AP_PACKAGE_PREFIX = "ap_"
+_RAC_PACKAGE_PREFIX = "rac_"
+# State-shadow fields only one of the two families has.
+_RAC_STATE_FIELDS = frozenset({"tempSetpoint", "vSwingEnabled", "hSwingEnabled"})
+_AP_STATE_FIELDS = frozenset({"filterReset", "lightEnabled", "displayEnabled"})
+# The purifier's manual-mode-only speed field and its timers.
+AP_TIMER_FIELDS = frozenset({"onTimer", "offTimer"})
+AP_MODE_MANUAL = "manual"
 
 # Cap a single cached payload. ``schedules`` arrives gzip+base64 and a handful of
 # devices would otherwise dominate a diagnostics dump.
@@ -268,7 +296,9 @@ class BaconMqttClient:
         self._connected = asyncio.Event()
         self._connect_done = asyncio.Event()
         self._connect_rc: Any = None
-        self._get_futures: dict[str, asyncio.Future] = {}
+        # One pending read per (serial, shadow): a device has several shadows
+        # (state, schedule, $package) and a reply must only answer its own.
+        self._get_futures: dict[tuple[str, str], asyncio.Future] = {}
         self._listeners: dict[str, list[ShadowListener]] = {}
         self._raw_listeners: list[RawListener] = []
         # (serial, channel_path) -> {"payload": ..., "received_at": ...}. One
@@ -396,6 +426,55 @@ class BaconMqttClient:
         payload = self.get_topic(serial, _TOPIC_INFO)
         return payload if isinstance(payload, dict) else None
 
+    async def async_wait_for_topic(
+        self,
+        serial: str,
+        subtopic: str,
+        timeout: float = 3.0,  # noqa: ASYNC109 - bounded wait is the whole point
+    ) -> Any | None:
+        """Return ``topics/{subtopic}`` of ``serial``, waiting briefly if unseen.
+
+        ``topics/*`` cannot be requested, but the broker retains the newest
+        payload of each, so right after (re)connecting it lands within tens of
+        milliseconds of the subscription. This waits that out instead of racing
+        it. Returns ``None`` when nothing arrives within ``timeout``.
+        """
+        cached = self.get_topic(serial, subtopic)
+        if cached is not None:
+            return cached
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        wanted = f"{_TOPICS_CHANNEL}/{subtopic}"
+
+        def _listener(msg_serial: str | None, path: str, payload: Any) -> None:
+            if msg_serial == serial and path == wanted and not future.done():
+                future.set_result(payload)
+
+        self.register_raw_listener(_listener)
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError:
+            return None
+        finally:
+            self.remove_raw_listener(_listener)
+
+    def get_package(self, serial: str) -> dict[str, Any] | None:
+        """Return the reported ``$package`` shadow for ``serial``, if cached.
+
+        A ``{"<package>": {"version": …, "attributes": …}}`` map whose key names
+        the firmware package (``ap_blwp_v1``, ``rac_midea_v1`` …). Populated by
+        :meth:`async_get_shadow` or by the device publishing it; a pure cache read.
+        """
+        with self._raw_lock:
+            entry = self._raw.get(
+                (serial, f"{_SHADOWS_CHANNEL}/{SHADOW_PACKAGE}/get/accepted")
+            )
+        payload = entry["payload"] if entry else None
+        if not isinstance(payload, dict):
+            return None
+        reported = (payload.get("state") or {}).get("reported")
+        return reported if isinstance(reported, dict) else None
+
     async def async_connect(self, token: str, sub: str) -> None:
         """(Re)connect to the broker with a fresh token. Idempotent.
 
@@ -490,21 +569,35 @@ class BaconMqttClient:
         serial: str,
         timeout: float = 10.0,  # noqa: ASYNC109 - public API mirrors other device reads
     ) -> dict[str, Any]:
-        """Request the current shadow for ``serial`` and await the reply.
+        """Request the current ``state`` shadow for ``serial`` and await the reply.
 
         Returns ``{"reported": {...}, "desired": {...}}``.
+        """
+        return await self.async_get_shadow(serial, SHADOW_STATE, timeout=timeout)
+
+    async def async_get_shadow(
+        self,
+        serial: str,
+        shadow: str = SHADOW_STATE,
+        timeout: float = 10.0,  # noqa: ASYNC109 - public API mirrors other device reads
+    ) -> dict[str, Any]:
+        """Request one of the device's shadows and await the reply.
+
+        ``shadow`` is ``state`` (the controls), ``schedule`` or ``$package`` (the
+        installed firmware package, which also tells an air purifier from an
+        AC). Returns ``{"reported": {...}, "desired": {...}}``.
         """
         if self._client is None:
             raise ApiError("Bacon MQTT client not connected")
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
-        self._get_futures[serial] = future
-        self._client.publish(self._shadow_topic(serial, "get"), "")
+        self._get_futures[serial, shadow] = future
+        self._client.publish(self._shadow_topic(serial, "get", shadow), "")
         try:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError as err:
-            self._get_futures.pop(serial, None)
-            raise ApiError(f"Timed out reading shadow for {serial}") from err
+            self._get_futures.pop((serial, shadow), None)
+            raise ApiError(f"Timed out reading {shadow} shadow for {serial}") from err
 
     async def async_set_desired(self, serial: str, desired: dict[str, Any]) -> None:
         """Publish a partial ``desired`` shadow update for ``serial``."""
@@ -513,8 +606,12 @@ class BaconMqttClient:
         payload = json.dumps({"state": {"desired": desired}})
         self._client.publish(self._shadow_topic(serial, "update"), payload)
 
-    def _shadow_topic(self, serial: str, suffix: str) -> str:
-        return f"users/{self._sub}/devices/{serial}/shadows/state/{suffix}"
+    def _shadow_topic(
+        self, serial: str, suffix: str, shadow: str = SHADOW_STATE
+    ) -> str:
+        return (
+            f"users/{self._sub}/devices/{serial}/{_SHADOWS_CHANNEL}/{shadow}/{suffix}"
+        )
 
     # -- paho callbacks (run on paho's network thread) --------------------------
 
@@ -578,25 +675,27 @@ class BaconMqttClient:
         self._cache_raw(parsed, payload)
         self._notify_raw(parsed, payload)
 
-        if parsed.channel == "shadows" and parsed.serial is not None:
+        if parsed.channel == _SHADOWS_CHANNEL and parsed.serial is not None:
             self._handle_shadow(parsed.serial, parsed.path, payload)
 
     def _handle_shadow(self, serial: str, path: str, payload: Any) -> None:
         """Resolve a pending get and fan a shadow change out to its listeners.
 
-        Only the ``state`` shadow takes part. The wildcard subscription also
-        delivers the ``schedule`` and ``$package`` shadows of the same device;
-        matching on the ``get/accepted`` suffix alone let whichever of them
-        replied first answer a pending *state* read with the wrong document
-        (hass#203), and pushed their ``update/accepted`` into the state
-        listeners. Those shadows are still cached and handed to raw listeners.
+        Each shadow answers only its own read: the wildcard subscription delivers
+        the ``state``, ``schedule`` and ``$package`` shadows of the same device,
+        and matching on the ``get/accepted`` suffix alone let whichever replied
+        first answer a pending *state* read with the wrong document (hass#203).
+        Only the ``state`` shadow is fanned out to shadow listeners; the others
+        are still cached and handed to raw listeners.
         """
-        if path == "state/get/rejected":
-            self._resolve_get(serial, exc=ApiError(f"Shadow get rejected for {serial}"))
+        shadow, _, verb = path.partition("/")
+        if verb == "get/rejected":
+            exc = ApiError(f"{shadow} shadow get rejected for {serial}")
+            self._resolve_get(serial, shadow, exc=exc)
             return
 
-        is_get = path == "state/get/accepted"
-        is_update = path == "state/update/accepted"
+        is_get = verb == "get/accepted"
+        is_update = verb == "update/accepted"
         if not (is_get or is_update):
             return
 
@@ -608,7 +707,9 @@ class BaconMqttClient:
         # Only a get/accepted answers a pending read; update/accepted (deltas,
         # keep-alives) must not resolve an in-flight get with partial state.
         if is_get:
-            self._resolve_get(serial, result=result)
+            self._resolve_get(serial, shadow, result=result)
+        if shadow != SHADOW_STATE:
+            return
         for callback in self._listeners.get(serial, []):
             if self._loop is not None:
                 self._loop.call_soon_threadsafe(callback, result)
@@ -653,9 +754,13 @@ class BaconMqttClient:
             )
 
     def _resolve_get(
-        self, serial: str, result: dict | None = None, exc: Exception | None = None
+        self,
+        serial: str,
+        shadow: str,
+        result: dict | None = None,
+        exc: Exception | None = None,
     ) -> None:
-        future = self._get_futures.pop(serial, None)
+        future = self._get_futures.pop((serial, shadow), None)
         if future is None or self._loop is None or future.done():
             return
         if exc is not None:
@@ -664,14 +769,110 @@ class BaconMqttClient:
             self._loop.call_soon_threadsafe(future.set_result, result)
 
 
-class HomeComBaconRac:
-    """Per-device facade over a shared :class:`BaconMqttClient`."""
+def classify_bacon_device(
+    info: dict[str, Any] | None = None,
+    package: dict[str, Any] | None = None,
+    reported: dict[str, Any] | None = None,
+) -> str | None:
+    """Tell an air purifier from an AC using whatever has been seen so far.
+
+    The claiming endpoint returns bare serials, so the family is decided the way
+    the HomeCom Easy app does it — from ``topics/info.appliance.type`` matched by
+    prefix (``air_4000i``, ``air_4001i_v2`` …) — with two fallbacks for a device
+    whose retained info has not arrived: the ``$package`` shadow's package name
+    (``ap_blwp_v1`` vs ``rac_midea_v1``) and, last, fields only one family has in
+    its state shadow. Returns ``None`` when nothing given is conclusive.
+    """
+    return (
+        _classify_by_appliance(info)
+        or _classify_by_package(package)
+        or _classify_by_state(reported)
+    )
+
+
+def _classify_by_appliance(info: dict[str, Any] | None) -> str | None:
+    appliance = (info or {}).get("appliance")
+    appliance_type = appliance.get("type") if isinstance(appliance, dict) else None
+    if not isinstance(appliance_type, str) or not appliance_type.strip():
+        return None
+    if appliance_type.strip().lower().startswith(_AP_APPLIANCE_PREFIXES):
+        return BACON_AP_TYPE
+    return BACON_RAC_TYPE
+
+
+def _classify_by_package(package: dict[str, Any] | None) -> str | None:
+    for name in package or {}:
+        lowered = str(name).lower()
+        if lowered.startswith(_AP_PACKAGE_PREFIX):
+            return BACON_AP_TYPE
+        if lowered.startswith(_RAC_PACKAGE_PREFIX):
+            return BACON_RAC_TYPE
+    return None
+
+
+def _classify_by_state(reported: dict[str, Any] | None) -> str | None:
+    fields = set(reported or {})
+    if fields & _RAC_STATE_FIELDS:
+        return BACON_RAC_TYPE
+    if fields & _AP_STATE_FIELDS:
+        return BACON_AP_TYPE
+    return None
+
+
+async def async_classify_bacon_device(
+    client: BaconMqttClient,
+    serial: str,
+    *,
+    info_timeout: float = 3.0,
+    shadow_timeout: float = 5.0,
+) -> str:
+    """Return the bacon device type of ``serial`` (``bacon_rac``/``bacon_ap``).
+
+    Reads, in order, the retained ``topics/info`` (waiting ``info_timeout`` for
+    it to land after a fresh connect), the ``$package`` shadow and the ``state``
+    shadow, stopping at the first that is conclusive. Falls back to
+    ``bacon_rac`` — the only type that existed before purifiers were supported —
+    so a device that answers nothing is set up the way it always was.
+    """
+    info = await client.async_wait_for_topic(serial, _TOPIC_INFO, timeout=info_timeout)
+    device_type = classify_bacon_device(info=info)
+    if device_type is not None:
+        return device_type
+
+    package: dict[str, Any] | None = client.get_package(serial)
+    if package is None:
+        try:
+            shadow = await client.async_get_shadow(
+                serial, SHADOW_PACKAGE, timeout=shadow_timeout
+            )
+            package = shadow.get("reported")
+        except ApiError:
+            package = None
+    device_type = classify_bacon_device(package=package)
+    if device_type is not None:
+        return device_type
+
+    try:
+        state = await client.async_get_state(serial, timeout=shadow_timeout)
+    except ApiError:
+        return BACON_RAC_TYPE
+    return classify_bacon_device(reported=state.get("reported")) or BACON_RAC_TYPE
+
+
+class HomeComBaconDevice:
+    """Per-device facade over a shared :class:`BaconMqttClient`.
+
+    Common to both bacon families: the shadow read, the push-only topics and the
+    ``powerEnabled``/``opMode``/``*Enabled`` writes. :class:`HomeComBaconRac` and
+    :class:`HomeComBaconAp` add the controls specific to each appliance.
+    """
+
+    device_type: str = BACON_RAC_TYPE
 
     def __init__(self, client: BaconMqttClient, serial: str) -> None:
         """Bind a single serial to the shared MQTT client."""
         self._client = client
         self.device_id = serial
-        self.device_type = BACON_RAC_TYPE
 
     async def async_update(self) -> dict[str, Any]:
         """Return the current shadow (``{"reported": ..., "desired": ...}``)."""
@@ -703,8 +904,27 @@ class HomeComBaconRac:
         await self._client.async_set_desired(self.device_id, desired)
 
     async def async_set_mode(self, mode: str) -> None:
-        """Set the operating mode (cool/heat/auto/dry/fan)."""
+        """Set the operating mode (``opMode``); the allowed values are per family."""
         await self._client.async_set_desired(self.device_id, {"opMode": mode})
+
+    async def async_set_feature(self, field: str, enabled: bool) -> None:
+        """Enable/disable a boolean ``*Enabled`` field, e.g. ``ionizerEnabled``.
+
+        Whether the device currently accepts a given field is mode-dependent and
+        advertised via the per-field ``ro`` flag in ``topics/meta``; this only
+        publishes the desired state and does not itself check writability.
+        """
+        await self._client.async_set_desired(self.device_id, {field: bool(enabled)})
+
+
+class HomeComBaconRac(HomeComBaconDevice):
+    """A Matter-commissioned RAC air conditioner (Climate 3000i…7000i)."""
+
+    device_type = BACON_RAC_TYPE
+
+    async def async_set_mode(self, mode: str) -> None:
+        """Set the operating mode (cool/heat/auto/dry/fan)."""
+        await super().async_set_mode(mode)
 
     async def async_set_temperature(self, value: int) -> None:
         """Set the target temperature (°C, integer)."""
@@ -728,11 +948,48 @@ class HomeComBaconRac:
         if desired:
             await self._client.async_set_desired(self.device_id, desired)
 
-    async def async_set_feature(self, field: str, enabled: bool) -> None:
-        """Enable/disable a boolean comfort feature, e.g. ``ionizerEnabled``.
 
-        Whether the device currently accepts a given field is mode-dependent and
-        advertised via the per-field ``ro`` flag in ``topics/meta``; this only
-        publishes the desired state and does not itself check writability.
+class HomeComBaconAp(HomeComBaconDevice):
+    """A Matter-commissioned air purifier (Air 4000i and relatives).
+
+    State shadow (HomeCom Easy 4.0.0, Air 4000i): ``powerEnabled``, ``opMode``
+    (``auto``/``manual``/``silent``), ``fanSpeed`` (int, 1..3 per
+    ``topics/meta``), ``childLockEnabled``, ``lightEnabled``, ``displayEnabled``,
+    ``onTimer``/``offTimer`` (minutes, 0..720 step 60) and ``filterReset``.
+    Readings — ``airQuality`` (1 good … 4 bad), ``pm2_5`` (µg/m³) and
+    ``filterCapacity`` (%) — come on the push-only ``topics/sensor`` channel.
+    """
+
+    device_type = BACON_AP_TYPE
+
+    async def async_set_mode(self, mode: str) -> None:
+        """Set the operating mode (auto/manual/silent)."""
+        await super().async_set_mode(mode)
+
+    async def async_set_fan_speed(self, speed: int, *, power_on: bool = False) -> None:
+        """Set a manual fan speed.
+
+        The app only offers the speed selector in ``manual`` mode and the device
+        advertises ``fanSpeed`` as schedulable only together with ``manual``, so
+        the mode is written alongside the speed. ``power_on`` also sets
+        ``powerEnabled`` for a unit that is currently off.
         """
-        await self._client.async_set_desired(self.device_id, {field: bool(enabled)})
+        desired: dict[str, Any] = {"opMode": AP_MODE_MANUAL, "fanSpeed": int(speed)}
+        if power_on:
+            desired["powerEnabled"] = True
+        await self._client.async_set_desired(self.device_id, desired)
+
+    async def async_set_timer(self, field: str, minutes: int) -> None:
+        """Set ``onTimer`` or ``offTimer`` — a duration in minutes, 0 cancels."""
+        if field not in AP_TIMER_FIELDS:
+            raise ValueError(f"{field} is not a timer field")
+        await self._client.async_set_desired(self.device_id, {field: int(minutes)})
+
+    async def async_reset_filter(self) -> None:
+        """Write ``filterReset`` to acknowledge a filter change.
+
+        The HomeCom Easy app never writes this field — its filter-replacement
+        screen is purely instructional — so whether the device resets
+        ``filterCapacity`` and clears the flag on its own is unverified.
+        """
+        await self._client.async_set_desired(self.device_id, {"filterReset": True})

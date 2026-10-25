@@ -167,8 +167,8 @@ class BHCDeviceCommodule:
 
 
 @dataclass(frozen=True)
-class BHCDeviceBaconRac:
-    """Data class for a Matter/Bacon-commissioned RAC (AC) device.
+class BHCDeviceBacon:
+    """Data class for a Matter/Bacon-commissioned device (AC or air purifier).
 
     ``reported``/``desired`` are the raw shadow state maps
     (``powerEnabled``, ``opMode``, ``fanSpeed``, ``tempSetpoint`` …).
@@ -189,3 +189,7 @@ class BHCDeviceBaconRac:
     sensor: dict | None = None
     metadata: dict | None = None
     info: dict | None = None
+
+
+# The AC was the only bacon family before purifiers were supported.
+BHCDeviceBaconRac = BHCDeviceBacon

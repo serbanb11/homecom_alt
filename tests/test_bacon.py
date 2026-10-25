@@ -13,18 +13,24 @@ import pytest
 from homecom_alt import bacon
 from homecom_alt.bacon import (
     BaconMqttClient,
+    HomeComBaconAp,
+    HomeComBaconDevice,
     HomeComBaconRac,
+    async_classify_bacon_device,
     async_get_bacon_devices,
+    classify_bacon_device,
     decode_jwt_exp,
     decode_jwt_sub,
     generate_client_id,
     parse_topic,
 )
+from homecom_alt.const import BACON_AP_TYPE, BACON_RAC_TYPE
 from homecom_alt.exceptions import (
     ApiError,
     AuthFailedError,
     MqttNotAuthorizedError,
 )
+from homecom_alt.model import BHCDeviceBacon, BHCDeviceBaconRac
 
 
 def _make_jwt(payload: dict) -> str:
@@ -680,3 +686,228 @@ async def test_async_set_feature_publishes_desired() -> None:
     client.async_set_desired.assert_awaited_once_with(
         "86DM-1", {"fullPowerEnabled": False}
     )
+
+
+# ---------------------------------------------------------------------------
+# Air purifiers (bacon_ap): classification, per-shadow reads, controls
+# ---------------------------------------------------------------------------
+
+_AP_INFO = {"online": True, "appliance": {"type": "air_4000i"}}
+_AP_STATE = {
+    "powerEnabled": True,
+    "opMode": "auto",
+    "fanSpeed": 1,
+    "childLockEnabled": False,
+    "lightEnabled": False,
+    "displayEnabled": False,
+    "onTimer": 0,
+    "offTimer": 0,
+    "filterReset": False,
+}
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"info": _AP_INFO}, BACON_AP_TYPE),
+        ({"info": {"appliance": {"type": "Air 4001i"}}}, BACON_AP_TYPE),
+        ({"info": {"appliance": {"type": "air_4000i_v2"}}}, BACON_AP_TYPE),
+        ({"info": {"appliance": {"type": "rac_midea"}}}, BACON_RAC_TYPE),
+        ({"info": {"appliance": {"type": ""}}}, None),
+        ({"info": {"appliance": "junk"}}, None),
+        ({"package": {"ap_blwp_v1": {"version": "1.0.1"}}}, BACON_AP_TYPE),
+        ({"package": {"rac_midea_v1": {"version": "2.4.2"}}}, BACON_RAC_TYPE),
+        ({"package": {"something_else": {}}}, None),
+        ({"reported": _AP_STATE}, BACON_AP_TYPE),
+        ({"reported": {"powerEnabled": True, "tempSetpoint": 23}}, BACON_RAC_TYPE),
+        ({"reported": {"powerEnabled": True, "opMode": "cool"}}, None),
+        ({}, None),
+    ],
+)
+def test_classify_bacon_device(kwargs: dict, expected: str | None) -> None:
+    """Appliance type wins, then the firmware package, then family-only fields."""
+    assert classify_bacon_device(**kwargs) == expected
+
+
+def test_classify_bacon_device_prefers_appliance_type() -> None:
+    """A conclusive topics/info is not second-guessed by the other sources."""
+    assert (
+        classify_bacon_device(
+            info=_AP_INFO,
+            package={"rac_midea_v1": {}},
+            reported={"tempSetpoint": 23},
+        )
+        == BACON_AP_TYPE
+    )
+
+
+@pytest.mark.asyncio
+async def test_async_classify_waits_for_retained_info(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh connect classifies from topics/info arriving a moment later."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(
+        async_classify_bacon_device(client, "86DM-1", info_timeout=2)
+    )
+    await asyncio.sleep(0)
+    assert not task.done()
+
+    _deliver(client, "users/sub-1/devices/86DM-1/topics/info", _AP_INFO)
+    assert await task == BACON_AP_TYPE
+    # The wait registered a one-off raw listener and removed it again.
+    assert client._raw_listeners == []
+    # No shadow read was needed.
+    assert _FakeMqttClient.last.published == []
+
+
+@pytest.mark.asyncio
+async def test_async_classify_falls_back_to_package_shadow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without info the $package shadow is read, and only that shadow answers."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(
+        async_classify_bacon_device(client, "86DM-1", info_timeout=0.01)
+    )
+    await asyncio.sleep(0.05)
+    assert _FakeMqttClient.last.published == [
+        ("users/sub-1/devices/86DM-1/shadows/$package/get", "")
+    ]
+
+    # A state get/accepted for the same serial must not answer the package read.
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+        {"state": {"reported": {"tempSetpoint": 23}}},
+    )
+    await asyncio.sleep(0)
+    assert not task.done()
+
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/$package/get/accepted",
+        {"state": {"reported": {"ap_blwp_v1": {"version": "1.0.1"}}}},
+    )
+    assert await task == BACON_AP_TYPE
+    assert client.get_package("86DM-1") == {"ap_blwp_v1": {"version": "1.0.1"}}
+
+
+@pytest.mark.asyncio
+async def test_async_classify_falls_back_to_state_then_rac(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With neither info nor package the state shadow decides; else bacon_rac."""
+    client = await _connected_client(monkeypatch)
+    task = asyncio.ensure_future(
+        async_classify_bacon_device(
+            client, "86DM-1", info_timeout=0.01, shadow_timeout=0.05
+        )
+    )
+    await asyncio.sleep(0.1)  # $package read times out
+    _deliver(
+        client,
+        "users/sub-1/devices/86DM-1/shadows/state/get/accepted",
+        {"state": {"reported": _AP_STATE}},
+    )
+    assert await task == BACON_AP_TYPE
+
+    # Nothing answers at all: the pre-purifier default.
+    assert (
+        await async_classify_bacon_device(
+            client, "86DM-2", info_timeout=0.01, shadow_timeout=0.02
+        )
+        == BACON_RAC_TYPE
+    )
+
+
+@pytest.mark.asyncio
+async def test_async_wait_for_topic_returns_cached_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A topic already seen is returned without waiting."""
+    client = await _connected_client(monkeypatch)
+    _deliver(client, "users/sub-1/devices/86DM-1/topics/info", _AP_INFO)
+    assert await client.async_wait_for_topic("86DM-1", "info", timeout=0) == _AP_INFO
+    assert await client.async_wait_for_topic("86DM-1", "meta", timeout=0.01) is None
+
+
+@pytest.mark.asyncio
+async def test_get_package_none_until_seen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """get_package is a cache read: None before the shadow has been fetched."""
+    client = await _connected_client(monkeypatch)
+    assert client.get_package("86DM-1") is None
+    _deliver(client, "users/sub-1/devices/86DM-1/shadows/$package/get/accepted", {})
+    assert client.get_package("86DM-1") is None
+
+
+@pytest.mark.asyncio
+async def test_package_get_rejected_fails_only_the_package_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each shadow's get/rejected fails its own pending read, not another's."""
+    client = await _connected_client(monkeypatch)
+    state_task = asyncio.ensure_future(client.async_get_state("86DM-1", timeout=5))
+    package_task = asyncio.ensure_future(
+        client.async_get_shadow("86DM-1", "$package", timeout=5)
+    )
+    await asyncio.sleep(0)
+
+    _deliver(client, "users/sub-1/devices/86DM-1/shadows/$package/get/rejected", {})
+    with pytest.raises(ApiError, match=r"\$package shadow get rejected"):
+        await package_task
+    assert not state_task.done()
+    state_task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_ap_set_fan_speed_writes_manual_mode() -> None:
+    """A speed write always carries opMode=manual, plus power when asked."""
+    client = AsyncMock()
+    ap = HomeComBaconAp(client, "86DM-1")
+    assert ap.device_type == BACON_AP_TYPE
+
+    await ap.async_set_fan_speed(2)
+    client.async_set_desired.assert_awaited_once_with(
+        "86DM-1", {"opMode": "manual", "fanSpeed": 2}
+    )
+
+    client.async_set_desired.reset_mock()
+    await ap.async_set_fan_speed(3, power_on=True)
+    client.async_set_desired.assert_awaited_once_with(
+        "86DM-1", {"opMode": "manual", "fanSpeed": 3, "powerEnabled": True}
+    )
+
+
+@pytest.mark.asyncio
+async def test_ap_timer_reset_and_mode_writes() -> None:
+    """Timer, filter-reset and mode/power writes publish the expected fields."""
+    client = AsyncMock()
+    ap = HomeComBaconAp(client, "86DM-1")
+
+    await ap.async_set_timer("offTimer", 120)
+    client.async_set_desired.assert_awaited_with("86DM-1", {"offTimer": 120})
+    with pytest.raises(ValueError, match="not a timer field"):
+        await ap.async_set_timer("fanSpeed", 1)
+
+    await ap.async_reset_filter()
+    client.async_set_desired.assert_awaited_with("86DM-1", {"filterReset": True})
+
+    await ap.async_set_mode("silent")
+    client.async_set_desired.assert_awaited_with("86DM-1", {"opMode": "silent"})
+
+    await ap.async_set_power(on=True, mode="auto")
+    client.async_set_desired.assert_awaited_with(
+        "86DM-1", {"powerEnabled": True, "opMode": "auto"}
+    )
+
+    await ap.async_set_feature("childLockEnabled", enabled=True)
+    client.async_set_desired.assert_awaited_with("86DM-1", {"childLockEnabled": True})
+
+
+def test_rac_facade_unchanged() -> None:
+    """HomeComBaconRac keeps its type; the model alias still resolves."""
+    rac = HomeComBaconRac(AsyncMock(), "86DM-1")
+    assert rac.device_type == BACON_RAC_TYPE
+    assert isinstance(rac, HomeComBaconDevice)
+    assert BHCDeviceBaconRac is BHCDeviceBacon
