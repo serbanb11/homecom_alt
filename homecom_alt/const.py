@@ -488,6 +488,9 @@ LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
     "/heatingCircuits/hc1/currentSuWiMode",
     "/heatingCircuits/hc1/maxFlowTemp",
     "/heatingCircuits/hc1/pumpStatus",
+    "/heatingCircuits/hc2/pumpStatus",
+    "/heatingCircuits/hc3/pumpStatus",
+    "/heatingCircuits/hc4/pumpStatus",
 )
 
 # DHW mode is not a resource on the Local API: there is no
