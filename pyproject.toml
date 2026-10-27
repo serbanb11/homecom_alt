@@ -38,7 +38,7 @@ module-root = ""
 [dependency-groups]
 dev = [
     "aioresponses==0.7.9",
-    "coverage==7.16.2",
+    "coverage==7.17.0",
     "mypy==2.4.0",
     "pre-commit==4.7.0",
     "pytest==9.1.1",
