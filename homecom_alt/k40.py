@@ -103,6 +103,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION_EXHAUST_TEMP,
     BOSCHCOM_ENDPOINT_VENTILATION_EXTRACT_TEMP,
     BOSCHCOM_ENDPOINT_VENTILATION_FAN,
+    BOSCHCOM_ENDPOINT_VENTILATION_FILTER_REMAINING_TIME,
     BOSCHCOM_ENDPOINT_VENTILATION_HUMIDITY,
     BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_VENTILATION_INTERNAL_QUALITY,
@@ -2791,6 +2792,7 @@ class HomeComK40(HomeComAlt):
                     prefix + BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING,
                     prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY,
                     prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY,
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_FILTER_REMAINING_TIME,
                 ]
                 vent_bulk = (
                     await self.async_request_bulk(device_id, vent_endpoints) or {}
@@ -2845,6 +2847,9 @@ class HomeComK40(HomeComAlt):
                 )
                 ref["demandrelativeHumidity"] = vent_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY
+                )
+                ref["filterRemainingTime"] = vent_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_VENTILATION_FILTER_REMAINING_TIME
                 )
 
             await asyncio.gather(*(populate_vent(ref) for ref in vent_refs))
