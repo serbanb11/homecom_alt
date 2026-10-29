@@ -124,6 +124,11 @@ BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP: Final[str] = (
     "/resource/heatSources/actualSupplyTemperature"
 )
 BOSCHCOM_ENDPOINT_HS_MODULATION: Final[str] = "/resource/heatSources/actualModulation"
+# Compressor operating state: off, heating, cooling, dhw, pool, pool_heat,
+# defrost or alarm. Cloud only; the K 40 RF Local API answers 403.
+BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS: Final[str] = (
+    "/resource/heatSources/compressor/status"
+)
 BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
     "/resource/heatSources/systemPressure"
 )
