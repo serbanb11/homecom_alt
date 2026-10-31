@@ -1777,6 +1777,22 @@ async def test_icom_inherits_hc_suwi_switch_mode_put() -> None:
 
 
 @pytest.mark.asyncio
+async def test_icom_set_hc_active_switch_program() -> None:
+    """The A/B program choice is a PUT on activeSwitchProgram."""
+    session = ClientSession()
+    icom = _make_icom(session)
+
+    with patch.object(icom, "_async_http_request", new=AsyncMock()) as mock_req:
+        await icom.async_set_hc_active_switch_program(DEVICE_ID, "hc1", "B")
+        assert mock_req.call_args[0][1].endswith(
+            "/heatingCircuits/hc1/activeSwitchProgram"
+        )
+        assert mock_req.call_args[0][2] == {"value": "B"}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_k40_hc_heatcool_mode() -> None:
     """Test K40 HC heat/cool mode get and put."""
     session = ClientSession()

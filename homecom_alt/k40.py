@@ -39,6 +39,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY_ENTRIES,
     BOSCHCOM_ENDPOINT_ENERGY_HISTORY_HOURLY,
     BOSCHCOM_ENDPOINT_GATEWAYS,
+    BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM,
     BOSCHCOM_ENDPOINT_HC_ACTUAL_HUMIDITY,
     BOSCHCOM_ENDPOINT_HC_ACTUAL_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HC_CONTROL,
@@ -1799,6 +1800,28 @@ class HomeComK40(HomeComAlt):
             + "/"
             + hc_id
             + BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_COMFORT2,
+            {"value": value},
+            1,
+        )
+
+    async def async_set_hc_active_switch_program(
+        self, device_id: str, hc_id: str, value: str
+    ) -> None:
+        """Select which switch program (``A`` or ``B``) a heating circuit follows.
+
+        The icom bulk reads the current one as ``activeSwitchProgram``; the app
+        writes it with a plain PUT on the same path.
+        """
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_HEATING_CIRCUITS
+            + "/"
+            + hc_id
+            + BOSCHCOM_ENDPOINT_HC_ACTIVE_SWITCH_PROGRAM,
             {"value": value},
             1,
         )
