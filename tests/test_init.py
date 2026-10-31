@@ -3888,6 +3888,8 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
         ("/dhwCircuits/dhw1/currentTemperatureLevel", {"value": "high"}),
         ("/dhwCircuits/dhw1/operationMode", {"value": "high"}),
         ("/dhwCircuits/dhw1/actualTemp", {"value": 51.3, "unitOfMeasure": "C"}),
+        ("/solarCircuits/sc1/collectorTemperature", {"value": 61.5}),
+        ("/solarCircuits/sc1/solarYield", {"value": 123}),
         ("/system/holidayModes/hm1/dhwMode", {"value": "off"}),
         ("/system/holidayModes/hm1/hcMode", {"value": "off"}),
         ("/system/holidayModes/hm1/fixTemperature", {"value": 18}),
@@ -3941,6 +3943,9 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
             return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         if url.endswith("/resource/gateway/versionFirmware"):
             return _mock_json_response({"value": "1.0"})
+        for needle, payload in icom_routes:
+            if needle in url:
+                return _mock_json_response(payload)
         return _mock_json_response({})
 
     with patch.object(icom, "_async_http_request", new=AsyncMock(side_effect=route)):
@@ -3951,7 +3956,12 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
     assert len(result.heating_circuits) == 1
     assert result.heating_circuits[0]["operationMode"] == {"value": "auto"}
     assert result.dhw_circuits[0]["holidayActivated"] == {"value": "off"}
-    assert result.solar_circuits == [{"id": "/solarCircuits/sc1"}]
+    # Solar circuits are populated like on a K40, not just listed.
+    solar = result.solar_circuits[0]
+    assert solar["id"] == "/solarCircuits/sc1"
+    assert solar["collectorTemperature"] == {"value": 61.5}
+    assert solar["solarYield"] == {"value": 123}
+    assert "dhwTankTemperature" in solar
     assert result.ventilation[0]["exhaustFanLevel"] == {"value": "min"}
     assert result.ventilation[0]["operationMode"] == {"value": "auto"}
     assert result.holiday_mode[0]["fixTemperature"] == {"value": 18}
@@ -3969,11 +3979,13 @@ async def test_icom_async_update_returns_bhcdeviceicom() -> None:
     assert dhw["charge"] == {"value": "stop"}
     assert dhw["chargeDuration"] == {"value": 120}
     assert dhw["singleChargeSetpoint"] == {"value": 58}
-    assert dhw["temperatureLevels"] == {
+    # The K40 key, so the component's shared DHW code reads the levels.
+    assert dhw["tempLevel"] == {
         "off": {"value": 10},
         "low": {"value": 40},
         "high": {"value": 60},
     }
+    assert "temperatureLevels" not in dhw
 
     await session.close()
 

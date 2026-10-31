@@ -64,6 +64,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_VENTILATION,
     BOSCHCOM_ENDPOINT_VENTILATION_FAN,
     BOSCHCOM_ENDPOINT_VENTILATION_OPERATION_MODE,
+    MAX_CONCURRENT,
 )
 from .k40 import HomeComK40
 from .model import (
@@ -502,7 +503,10 @@ class HomeComIcom(HomeComK40):
                 ref["currentSetpoint"] = dhw_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_DHW_CURRENT_SETPOINT
                 )
-                ref["temperatureLevels"] = {
+                # Same key as the K40 client, so the shared DHW consumers in
+                # the Home Assistant component read it (the HC key above
+                # keeps the API's name; nothing shares it).
+                ref["tempLevel"] = {
                     "off": dhw_bulk.get(
                         prefix + BOSCHCOM_ENDPOINT_DWH_TEMP_LEVEL + "/off"
                     ),
@@ -518,9 +522,11 @@ class HomeComIcom(HomeComK40):
         else:
             dhw_circuits["references"] = []
 
-        # Solar circuits — listing only (per spec).
-        solar_circuits = solar_circuits or {}
-        solar_refs = solar_circuits.get("references", [])
+        # Solar circuits: the same per-circuit values as on a K40, fetched by
+        # the inherited helper. Systems without a collector list none.
+        solar_refs = await self._populate_solar_circuits(
+            device_id, solar_circuits, asyncio.BoundedSemaphore(MAX_CONCURRENT)
+        )
 
         # --- Per-ventilation bulk ---
         ventilation = ventilation or {}
