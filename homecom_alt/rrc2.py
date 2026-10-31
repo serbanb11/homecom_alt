@@ -60,6 +60,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID,
     BOSCHCOM_ENDPOINT_RRC2_GATEWAY_WIFI_RSSI,
     BOSCHCOM_ENDPOINT_RRC2_SYSTEM_LOCATION,
+    BOSCHCOM_ENDPOINT_ZONE_CLOCK_OVERRIDE_TEMP_HEATING,
     BOSCHCOM_ENDPOINT_ZONE_ICON,
     BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
     BOSCHCOM_ENDPOINT_ZONE_NAME,
@@ -120,6 +121,28 @@ class HomeComRrc2(HomeComK40):
             + suffix,
         )
         return await self._to_data(response)
+
+    async def async_set_zone_clock_override_temp_heating(
+        self, device_id: str, zone_id: str, temp: float
+    ) -> None:
+        """Override the clock program's setpoint until its next switch point.
+
+        This is what the app writes when the zone is in ``clock`` mode;
+        ``manualTemperatureHeating`` only applies in ``manual`` mode.
+        """
+        await self.get_token()
+        await self._async_http_request(
+            "put",
+            BOSCHCOM_DOMAIN
+            + BOSCHCOM_ENDPOINT_GATEWAYS
+            + device_id
+            + BOSCHCOM_ENDPOINT_ZONES
+            + "/"
+            + zone_id
+            + BOSCHCOM_ENDPOINT_ZONE_CLOCK_OVERRIDE_TEMP_HEATING,
+            {"value": temp},
+            1,
+        )
 
     async def async_get_zone_name(self, device_id: str, zone_id: str) -> Any:
         """Zone name."""
@@ -462,6 +485,7 @@ class HomeComRrc2(HomeComK40):
                     prefix + BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL,
                     prefix + BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING,
                     prefix + BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING,
+                    prefix + BOSCHCOM_ENDPOINT_ZONE_CLOCK_OVERRIDE_TEMP_HEATING,
                     prefix + BOSCHCOM_ENDPOINT_ZONE_USER_MODE,
                     prefix + BOSCHCOM_ENDPOINT_ZONE_NAME,
                     prefix + BOSCHCOM_ENDPOINT_ZONE_ICON,
@@ -477,6 +501,9 @@ class HomeComRrc2(HomeComK40):
                 )
                 ref["manualTemperatureHeating"] = zone_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING
+                )
+                ref["clockOverrideTemperatureHeating"] = zone_bulk.get(
+                    prefix + BOSCHCOM_ENDPOINT_ZONE_CLOCK_OVERRIDE_TEMP_HEATING
                 )
                 ref["userMode"] = zone_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_ZONE_USER_MODE

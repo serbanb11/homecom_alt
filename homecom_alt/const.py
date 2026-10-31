@@ -222,6 +222,12 @@ BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL: Final[str] = "/temperatureActual"
 BOSCHCOM_ENDPOINT_ZONE_MANUAL_TEMP_HEATING: Final[str] = "/manualTemperatureHeating"
 BOSCHCOM_ENDPOINT_ZONE_USER_MODE: Final[str] = "/userMode"
 BOSCHCOM_ENDPOINT_ZONE_SETPOINT_TEMP_HEATING: Final[str] = "/temperatureHeatingSetpoint"
+# Setpoint override while a zone follows its clock program (rrc2). The app
+# writes this, not manualTemperatureHeating, when the zone is in clock mode;
+# 0 means no override.
+BOSCHCOM_ENDPOINT_ZONE_CLOCK_OVERRIDE_TEMP_HEATING: Final[str] = (
+    "/clockOverride/temperatureHeating"
+)
 
 BOSCHCOM_ENDPOINT_HC_MAX_SUPPLY: Final[str] = "/maxSupply"
 BOSCHCOM_ENDPOINT_HC_MIN_SUPPLY: Final[str] = "/minSupply"

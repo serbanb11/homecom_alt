@@ -4012,6 +4012,7 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
         "/zones/zone1/temperatureActual": {"value": 20.0},
         "/zones/zone1/temperatureHeatingSetpoint": {"value": 21.0},
         "/zones/zone1/manualTemperatureHeating": {"value": 21.5},
+        "/zones/zone1/clockOverride/temperatureHeating": {"value": 0.0},
         "/zones/zone1/name": {"value": "Living"},
         "/zones/zone1/icon": {"value": "icon1"},
         "/heatingCircuits/hc1/supplyTemperatureSetpoint": {"value": 45.0},
@@ -4059,6 +4060,7 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
     assert result.zones[0]["temperatureActual"] == {"value": 20.0}
     assert result.zones[0]["temperatureHeatingSetpoint"] == {"value": 21.0}
     assert result.zones[0]["manualTemperatureHeating"] == {"value": 21.5}
+    assert result.zones[0]["clockOverrideTemperatureHeating"] == {"value": 0.0}
     assert result.zones[0]["name"] == {"value": "Living"}
     assert result.heating_circuits[0]["heatCurveMax"] == {"value": 75}
     assert result.heating_circuits[0]["control"] == {"value": "weather"}
@@ -4098,6 +4100,31 @@ async def test_rrc2_async_set_zone_manual_temp_heating() -> None:
     assert captured["method"] == "put"
     assert "/resource/zones/zone1/manualTemperatureHeating" in captured["url"]  # type: ignore[operator]
     assert captured["args"][0] == {"value": 21.5}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rrc2_async_set_zone_clock_override_temp_heating() -> None:
+    """The clock-mode override PUTs the clockOverride path with a float body."""
+    session = ClientSession()
+    rrc2 = _make_rrc2(session)
+
+    captured: dict[str, object] = {}
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        captured["method"] = method
+        captured["url"] = url
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _mock_json_response({})
+
+    with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        await rrc2.async_set_zone_clock_override_temp_heating(DEVICE_ID, "zn1", 22.0)
+
+    assert captured["method"] == "put"
+    assert "/resource/zones/zn1/clockOverride/temperatureHeating" in captured["url"]  # type: ignore[operator]
+    assert captured["args"][0] == {"value": 22.0}
 
     await session.close()
 
