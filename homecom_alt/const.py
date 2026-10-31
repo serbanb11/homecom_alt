@@ -208,6 +208,9 @@ BOSCHCOM_ENDPOINT_VENTILATION_SUMMER_PASSIVE_COOLING: Final[str] = (
 )
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_QUALITY: Final[str] = "/demand/indoorAirQuality"
 BOSCHCOM_ENDPOINT_VENTILATION_DEMAND_HUMIDITY: Final[str] = "/demand/relativeHumidity"
+BOSCHCOM_ENDPOINT_VENTILATION_FILTER_REMAINING_TIME: Final[str] = (
+    "/filter/remainingTime"
+)
 
 BOSCHCOM_ENDPOINT_ZONES: Final[str] = "/resource/zones"
 BOSCHCOM_ENDPOINT_ZONE_TEMP_ACTUAL: Final[str] = "/temperatureActual"

@@ -1570,6 +1570,7 @@ async def test_k40_async_update_with_ventilation() -> None:
         "summerBypass/passiveCoolingSetpoint": {"value": 24},
         "demand/indoorAirQuality": {"value": 70},
         "demand/relativeHumidity": {"value": 55},
+        "filter/remainingTime": {"value": 21228, "unitOfMeasure": "mins"},
     }
 
     async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
@@ -1599,6 +1600,10 @@ async def test_k40_async_update_with_ventilation() -> None:
     assert result.ventilation[0]["summerBypassFlapPower"] == {"value": 100}
     assert result.ventilation[0]["summerBypassMinSupply"] == {"value": 18}
     assert result.ventilation[0]["summerBypassPassiveCooling"] == {"value": 24}
+    assert result.ventilation[0]["filterRemainingTime"] == {
+        "value": 21228,
+        "unitOfMeasure": "mins",
+    }
 
     await session.close()
 
