@@ -273,6 +273,28 @@ async def test_async_http_request_refused_put_raises(status) -> None:  # noqa: A
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [HTTPStatus.BAD_GATEWAY, HTTPStatus.GATEWAY_TIMEOUT])
+async def test_async_http_request_dropped_put_raises(status) -> None:  # noqa: ANN001
+    """A write the gateway never saw raises instead of passing silently (hass#219).
+
+    Reads keep tolerating 502/504 as transient (see the tests below); a stop
+    command answered with a 504 used to be reported as a success.
+    """
+    session = ClientSession()
+    options = _make_options()
+    bhc = await HomeComAlt.create(session, options, auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(None, (), status=status)
+        with pytest.raises(
+            ApiError, match=f"did not reach the gateway: {status.value}"
+        ):
+            await bhc._async_http_request("put", "http://test.com", {"value": 1}, 1)
+
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_async_http_request_other_client_error_raises_api_error() -> None:
     """Test that non-special HTTP errors raise ApiError."""
     session = ClientSession()
