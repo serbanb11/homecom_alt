@@ -1407,6 +1407,8 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
                     return {"value": 35}
                 if "actualModulation" in path:
                     return {"value": 50}
+                if "compressor/status" in path:
+                    return {"value": "defrost"}
                 if "collectorInflowTemp" in path:
                     return {"value": 10}
                 if "collectorOutflowTemp" in path:
@@ -1516,6 +1518,7 @@ async def test_k40_async_update_with_dhw_and_hc() -> None:  # noqa: C901, PLR091
     assert hc["roomInfluence"] == {"value": 3}
     assert result.flame_indication == {"value": "ch"}
     assert result.indoor_humidity == {"value": 43.5}
+    assert result.heat_sources["compressorStatus"] == {"value": "defrost"}
     assert result.energy_history == {"value": []}
     assert result.zones == {}
     assert result.devices == {}

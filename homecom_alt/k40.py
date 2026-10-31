@@ -69,6 +69,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER,
+    BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS,
     BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
@@ -2433,6 +2434,7 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
             BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
             BOSCHCOM_ENDPOINT_HS_MODULATION,
+            BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS,
             BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
             BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
             BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
@@ -2477,6 +2479,10 @@ class HomeComK40(HomeComAlt):
             )
             or {},
             "actualModulation": bulk_response.get(BOSCHCOM_ENDPOINT_HS_MODULATION)
+            or {},
+            "compressorStatus": bulk_response.get(
+                BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS
+            )
             or {},
             "collectorInflowTemp": bulk_response.get(BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP)
             or {},
