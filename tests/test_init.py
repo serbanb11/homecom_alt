@@ -2148,7 +2148,7 @@ async def test_k40_pool_getters_and_setters() -> None:
 
 @pytest.mark.asyncio
 async def test_k40_async_update_with_pool() -> None:
-    """K40 update populates the pool namespace and its energy when present."""
+    """K40 update populates the pool namespace when present."""
     session = ClientSession()
     k40 = _make_k40(session)
 
@@ -2192,7 +2192,9 @@ async def test_k40_async_update_with_pool() -> None:
     assert result.pool["setpointTemp"] == {"value": 29.0}
     assert result.pool["enabled"] == {"value": "on"}
     assert result.pool["additionalHeaterMode"] == {"value": "withHeating"}
-    assert result.pool["dayconsumption"] == [{"c": 3, "y": 4.5}, {"c": 0, "y": 1}]
+    # The per-poll burner recordings are gone (hass gap analysis B5).
+    assert "dayconsumption" not in result.pool
+    assert "dayconsumption" not in result.heat_sources
 
     await session.close()
 

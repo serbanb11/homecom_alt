@@ -132,6 +132,35 @@ BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS: Final[str] = (
 BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE: Final[str] = (
     "/resource/heatSources/systemPressure"
 )
+# Heat source status tiles the app's dashboard shows (all in the /heatSources
+# refEnum of a K 40, hass#161). Values: eHeater status uses the compressor
+# vocabulary (off, heating, dhw, pool, pool_heat, defrost, alarm); chStatus is
+# "off" when central heating is idle; the other three are "on"/"off".
+BOSCHCOM_ENDPOINT_HS_EHEATER_STATUS: Final[str] = (
+    "/resource/heatSources/Source/eHeater/status"
+)
+BOSCHCOM_ENDPOINT_HS_EMERGENCY_MODE: Final[str] = (
+    "/resource/heatSources/currentEmergencyMode"
+)
+BOSCHCOM_ENDPOINT_HS_STANDBY_MODE: Final[str] = "/resource/heatSources/standbyMode"
+BOSCHCOM_ENDPOINT_HS_CH_STATUS: Final[str] = "/resource/heatSources/chStatus"
+BOSCHCOM_ENDPOINT_HS_PV_CONTACT_STATE: Final[str] = (
+    "/resource/heatSources/pvContactState"
+)
+# Lifetime energy split per mode, same emonValue shape as totalConsumption
+# (values: outputProduced, eheater, compressor; unit kWh), hass#58.
+BOSCHCOM_ENDPOINT_HS_CH_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/emon/chConsumption"
+)
+BOSCHCOM_ENDPOINT_HS_DHW_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/emon/dhwConsumption"
+)
+BOSCHCOM_ENDPOINT_HS_COOLING_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/emon/coolingConsumption"
+)
+BOSCHCOM_ENDPOINT_HS_POOL_CONSUMPTION: Final[str] = (
+    "/resource/heatSources/emon/poolConsumption"
+)
 BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER: Final[str] = (
     "/resource/heatSources/additionalHeater/operationMode"
 )

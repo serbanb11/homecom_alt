@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from .base import HomeComAlt
@@ -70,14 +69,23 @@ from .const import (
     BOSCHCOM_ENDPOINT_HEATING_CIRCUITS,
     BOSCHCOM_ENDPOINT_HOLIDAY_MODE,
     BOSCHCOM_ENDPOINT_HS_ADDITIONAL_HEATER,
+    BOSCHCOM_ENDPOINT_HS_CH_CONSUMPTION,
+    BOSCHCOM_ENDPOINT_HS_CH_STATUS,
     BOSCHCOM_ENDPOINT_HS_COMPRESSOR_STATUS,
+    BOSCHCOM_ENDPOINT_HS_COOLING_CONSUMPTION,
+    BOSCHCOM_ENDPOINT_HS_DHW_CONSUMPTION,
+    BOSCHCOM_ENDPOINT_HS_EHEATER_STATUS,
+    BOSCHCOM_ENDPOINT_HS_EMERGENCY_MODE,
     BOSCHCOM_ENDPOINT_HS_FLAME,
     BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
     BOSCHCOM_ENDPOINT_HS_INFLOW_TEMP,
     BOSCHCOM_ENDPOINT_HS_MODULATION,
     BOSCHCOM_ENDPOINT_HS_OUTFLOW_TEMP,
+    BOSCHCOM_ENDPOINT_HS_POOL_CONSUMPTION,
     BOSCHCOM_ENDPOINT_HS_PUMP_TYPE,
+    BOSCHCOM_ENDPOINT_HS_PV_CONTACT_STATE,
     BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
+    BOSCHCOM_ENDPOINT_HS_STANDBY_MODE,
     BOSCHCOM_ENDPOINT_HS_STARTS,
     BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
     BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
@@ -2433,8 +2441,6 @@ class HomeComK40(HomeComAlt):
             async with semaphore:
                 return await coro
 
-        today = datetime.now(tz=UTC)
-
         # Fetch core resource endpoints + heat source sensors in a single bulk request
         bulk_endpoints = [
             BOSCHCOM_ENDPOINT_NOTIFICATIONS,
@@ -2464,6 +2470,15 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
             BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
             BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
+            BOSCHCOM_ENDPOINT_HS_EHEATER_STATUS,
+            BOSCHCOM_ENDPOINT_HS_EMERGENCY_MODE,
+            BOSCHCOM_ENDPOINT_HS_STANDBY_MODE,
+            BOSCHCOM_ENDPOINT_HS_CH_STATUS,
+            BOSCHCOM_ENDPOINT_HS_PV_CONTACT_STATE,
+            BOSCHCOM_ENDPOINT_HS_CH_CONSUMPTION,
+            BOSCHCOM_ENDPOINT_HS_DHW_CONSUMPTION,
+            BOSCHCOM_ENDPOINT_HS_COOLING_CONSUMPTION,
+            BOSCHCOM_ENDPOINT_HS_POOL_CONSUMPTION,
             # Swimming pool (absent on non-pool devices; 404 -> None, tolerated)
             BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
             BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
@@ -2520,6 +2535,25 @@ class HomeComK40(HomeComAlt):
             "systemPressure": bulk_response.get(BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE)
             or {},
             "flameIndication": flame_indication or {},
+            # Status tiles and the lifetime energy split (hass#161, hass#58).
+            "eHeaterStatus": bulk_response.get(BOSCHCOM_ENDPOINT_HS_EHEATER_STATUS)
+            or {},
+            "emergencyMode": bulk_response.get(BOSCHCOM_ENDPOINT_HS_EMERGENCY_MODE)
+            or {},
+            "standbyMode": bulk_response.get(BOSCHCOM_ENDPOINT_HS_STANDBY_MODE) or {},
+            "chStatus": bulk_response.get(BOSCHCOM_ENDPOINT_HS_CH_STATUS) or {},
+            "pvContactState": bulk_response.get(BOSCHCOM_ENDPOINT_HS_PV_CONTACT_STATE)
+            or {},
+            "chConsumption": bulk_response.get(BOSCHCOM_ENDPOINT_HS_CH_CONSUMPTION)
+            or {},
+            "dhwConsumption": bulk_response.get(BOSCHCOM_ENDPOINT_HS_DHW_CONSUMPTION)
+            or {},
+            "coolingConsumption": bulk_response.get(
+                BOSCHCOM_ENDPOINT_HS_COOLING_CONSUMPTION
+            )
+            or {},
+            "poolConsumption": bulk_response.get(BOSCHCOM_ENDPOINT_HS_POOL_CONSUMPTION)
+            or {},
         }
 
         # Energy endpoints fetched individually
@@ -2531,24 +2565,6 @@ class HomeComK40(HomeComAlt):
             limited_call(self.async_get_energy_history(device_id)),
             limited_call(self.async_get_energy_history_hourly(device_id)),
             limited_call(self.async_get_energy_gas_unit(device_id)),
-        )
-
-        (
-            heat_sources["dayconsumption"],
-            heat_sources["monthconsumption"],
-            heat_sources["yearconsumption"],
-        ) = await asyncio.gather(
-            limited_call(
-                self.async_get_consumption(
-                    device_id, "total", today.strftime("%Y-%m-%d")
-                )
-            ),
-            limited_call(
-                self.async_get_consumption(device_id, "total", today.strftime("%Y-%m"))
-            ),
-            limited_call(
-                self.async_get_consumption(device_id, "total", today.strftime("%Y"))
-            ),
         )
 
         # Swimming pool: only present on devices with a pool circuit. When the
@@ -2574,26 +2590,6 @@ class HomeComK40(HomeComAlt):
                 )
                 or {},
             }
-            (
-                pool["dayconsumption"],
-                pool["monthconsumption"],
-                pool["yearconsumption"],
-            ) = await asyncio.gather(
-                limited_call(
-                    self.async_get_consumption(
-                        device_id, "pool", today.strftime("%Y-%m-%d")
-                    )
-                ),
-                limited_call(
-                    self.async_get_consumption(
-                        device_id, "pool", today.strftime("%Y-%m")
-                    )
-                ),
-                limited_call(
-                    self.async_get_consumption(device_id, "pool", today.strftime("%Y"))
-                ),
-            )
-
         dhw_circuits = dhw_circuits or {}
         dhw_refs = dhw_circuits.get("references", [])
         if dhw_refs:
@@ -2637,28 +2633,6 @@ class HomeComK40(HomeComAlt):
                         strict=True,
                     ):
                         ref["tempLevel"][value] = res
-
-                (
-                    ref["dayconsumption"],
-                    ref["monthconsumption"],
-                    ref["yearconsumption"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y-%m-%d")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y-%m")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "dhw", today.strftime("%Y")
-                        )
-                    ),
-                )
 
             await asyncio.gather(*(populate_dhw(ref) for ref in dhw_refs))
         else:
@@ -2769,28 +2743,6 @@ class HomeComK40(HomeComAlt):
                 )
                 ref["temperatureLevelEco"] = hc_bulk.get(
                     prefix + BOSCHCOM_ENDPOINT_HC_TEMP_LEVELS_ECO
-                )
-
-                (
-                    ref["dayconsumption"],
-                    ref["monthconsumption"],
-                    ref["yearconsumption"],
-                ) = await asyncio.gather(
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y-%m-%d")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y-%m")
-                        )
-                    ),
-                    limited_call(
-                        self.async_get_consumption(
-                            device_id, "ch", today.strftime("%Y")
-                        )
-                    ),
                 )
 
             await asyncio.gather(*(populate_hc(ref) for ref in hc_refs))
