@@ -59,6 +59,7 @@ from .const import (
     LOCAL_MAX_CONCURRENT,
     LOCAL_POLL_RESOURCES,
     LOCAL_SAMPLE_RATES,
+    LOCAL_SYSTEM_INFO_RESOURCE,
     LOCAL_TIMEOUT,
     LOCAL_UNSUPPORTED_TTL,
     LOCAL_UPDATE_BUDGET,
@@ -70,7 +71,7 @@ from .exceptions import (
     ProximityRequiredError,
     TokenStoreFullError,
 )
-from .model import BHCDeviceK40Local
+from .model import BHCDeviceK40Local, BHCLocalModule
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -387,6 +388,22 @@ class HomeComK40Local:
             raise
         return {path: payload for path, payload in results if payload is not None}
 
+    async def async_get_modules(self) -> tuple[BHCLocalModule, ...] | None:
+        """Read the gateway's module inventory from ``/system/basicInfo``.
+
+        Returns the modules in the gateway's order, or ``None`` when the gateway
+        does not serve the resource. Entries that are not objects are skipped.
+        The inventory only changes when hardware does, so callers should read it
+        rarely (at setup, then about daily) rather than on every poll.
+        """
+        payload = await self.async_get_resource(LOCAL_SYSTEM_INFO_RESOURCE)
+        if payload is None:
+            return None
+        values = payload.get("values")
+        if not isinstance(values, list):
+            raise ApiError(f"Unexpected payload for {LOCAL_SYSTEM_INFO_RESOURCE}")
+        return tuple(_module(item) for item in values if isinstance(item, dict))
+
     async def async_get_recording(
         self,
         path: str,
@@ -473,6 +490,32 @@ class HomeComK40Local:
         if status is None:
             return None
         return LOCAL_DHW_STATUS_TO_MODE.get(status)
+
+
+def _text(value: Any) -> str | None:
+    """Return a non-empty string field, or ``None``."""
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    return None
+
+
+def _module(item: dict) -> BHCLocalModule:
+    """Build one inventory entry from a ``/system/basicInfo`` ``values`` item.
+
+    A float serial is dropped rather than formatted: the gateway already lost
+    digits when it encoded it in scientific notation.
+    """
+    return BHCLocalModule(
+        bus_id=_text(item.get("Id")),
+        token=_text(item.get("Tok")),
+        version=_text(item.get("Ver")),
+        product_name=_text(item.get("ProductName")),
+        hw_ident=_text(item.get("ModuleHwIdentStr")),
+        product_serial=_text(item.get("ProductSerialNumber")),
+        module_serial=_text(item.get("ModuleSerialNumber")),
+    )
 
 
 def _value(payload: dict | None) -> Any | None:

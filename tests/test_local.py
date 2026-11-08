@@ -20,6 +20,7 @@ from homecom_alt import (
     ApiError,
     AuthFailedError,
     BHCDeviceK40Local,
+    BHCLocalModule,
     HomeComK40Local,
     HomeComK40LocalFirst,
     NotRespondingError,
@@ -31,6 +32,8 @@ from homecom_alt.const import (
     LOCAL_API_PORT,
     LOCAL_AUTH_PORT,
     LOCAL_MAX_CONCURRENT,
+    LOCAL_POLL_RESOURCES,
+    LOCAL_SYSTEM_INFO_RESOURCE,
     LOCAL_TIMEOUT,
     LOCAL_UNSUPPORTED_TTL,
 )
@@ -984,3 +987,151 @@ async def test_local_timeout_is_shorter_than_the_cloud_default() -> None:
         assert LOCAL_TIMEOUT.total < DEFAULT_TIMEOUT.total
 
     await session.close()
+
+
+# ---------------------------------------------------------------------------
+# Module inventory (/system/basicInfo)
+# ---------------------------------------------------------------------------
+
+# The example from the official K 40 RF OpenAPI spec (bosch-home-comfort/api-docs),
+# including its float ModuleSerialNumber values.
+_BASIC_INFO = {
+    "id": "/system/basicInfo",
+    "type": "systeminfo",
+    "writeable": 0,
+    "status": "completed",
+    "timeStamp": "1684201667",
+    "gatewayId": "101012902",
+    "values": [
+        {
+            "Tok": "8",
+            "Id": "8",
+            "Ver": "23.06.02-5.33-d510f849",
+            "ProductName": "Compress CS6800iAW 12 E",
+            "ModuleSerialNumber": 5.703731019068751e21,
+            "ProductSerialNumber": "83703740000878738215205",
+            "ModuleHwIdentStr": "XCU_THH",
+        },
+        {
+            "Tok": "8",
+            "Id": "65281",
+            "Ver": "3.06.02-5.33-d510f849",
+            "ProductName": "AW 4 OR-S",
+            "ModuleSerialNumber": 5.703731009168751e21,
+            "ProductSerialNumber": "83703740000968738215209",
+            "ModuleHwIdentStr": "XCU_SRH",
+        },
+        {
+            "Tok": "72",
+            "Id": "17",
+            "Ver": "10.02.00",
+            "ModuleSerialNumber": "25302791000098738806125",
+            "ModuleHwIdentStr": "K40RF",
+        },
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_get_modules_parses_the_inventory() -> None:
+    """The spec example becomes one module per entry, in the gateway's order."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST, TOKEN)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as request:
+        request.return_value = _resp(_BASIC_INFO)
+        modules = await client.async_get_modules()
+        assert (
+            f":{LOCAL_API_PORT}{LOCAL_SYSTEM_INFO_RESOURCE}"
+            in (request.call_args.args[1])
+        )
+
+    assert modules is not None
+    assert [m.product_name for m in modules] == [
+        "Compress CS6800iAW 12 E",
+        "AW 4 OR-S",
+        None,
+    ]
+    appliance, outdoor, gateway = modules
+    assert appliance == BHCLocalModule(
+        bus_id="8",
+        token="8",
+        version="23.06.02-5.33-d510f849",
+        product_name="Compress CS6800iAW 12 E",
+        hw_ident="XCU_THH",
+        product_serial="83703740000878738215205",
+        module_serial=None,
+    )
+    assert outdoor.bus_id == "65281"
+    assert not appliance.is_gateway
+    assert gateway.is_gateway
+    # A string serial is kept; a float one already lost digits and is dropped.
+    assert gateway.module_serial == "25302791000098738806125"
+    assert outdoor.module_serial is None
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_modules_is_none_without_the_resource() -> None:
+    """A gateway that answers 404 has no inventory; that is not an error."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST, TOKEN)
+
+    with patch.object(
+        ClientSession,
+        "request",
+        new=AsyncMock(side_effect=_http_error(HTTPStatus.NOT_FOUND)),
+    ):
+        assert await client.async_get_modules() is None
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_modules_skips_odd_entries_and_coerces_numbers() -> None:
+    """Non-object entries drop out; integer ids become strings."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST, TOKEN)
+    payload = {
+        "id": LOCAL_SYSTEM_INFO_RESOURCE,
+        "values": ["junk", None, {"Id": 8, "Tok": 72, "Ver": "", "Extra": 1}],
+    }
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as request:
+        request.return_value = _resp(payload)
+        modules = await client.async_get_modules()
+
+    assert modules == (
+        BHCLocalModule(
+            bus_id="8",
+            token="72",
+            version=None,
+            product_name=None,
+            hw_ident=None,
+            product_serial=None,
+            module_serial=None,
+        ),
+    )
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_modules_rejects_a_payload_without_a_list() -> None:
+    """A malformed answer is an ApiError, not an empty inventory."""
+    session = ClientSession()
+    client = HomeComK40Local(session, HOST, TOKEN)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as request:
+        request.return_value = _resp({"id": LOCAL_SYSTEM_INFO_RESOURCE})
+        with pytest.raises(ApiError):
+            await client.async_get_modules()
+
+    await session.close()
+
+
+def test_inventory_is_not_polled_but_the_pump_flow_signal_is() -> None:
+    """The inventory is read on demand, not polled; the HC1 flow signal is polled."""
+    assert LOCAL_SYSTEM_INFO_RESOURCE not in LOCAL_POLL_RESOURCES
+    assert "/signals/SRC.HC1.FlowCtrl.PumpVolumeFlow" in LOCAL_POLL_RESOURCES

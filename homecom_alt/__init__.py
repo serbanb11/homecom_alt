@@ -44,6 +44,7 @@ from .model import (
     BHCDeviceRac,
     BHCDeviceRrc2,
     BHCDeviceWddw2,
+    BHCLocalModule,
     ConnectionOptions,
 )
 from .rac import HomeComRac
@@ -63,6 +64,7 @@ __all__ = [
     "BHCDeviceRac",
     "BHCDeviceRrc2",
     "BHCDeviceWddw2",
+    "BHCLocalModule",
     "BaconMqttClient",
     "BhcError",
     "ConnectionOptions",

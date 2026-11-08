@@ -476,6 +476,13 @@ LOCAL_UNSUPPORTED_TTL: Final[float] = 3600.0
 # gathers plus the local-only extras (real electrical power, refrigerant
 # circuit, per-mode counters). Unsupported paths drop out after the first poll
 # via the 404 cache, so this list can stay generous.
+# The gateway's module inventory: model, firmware and bus identity of the
+# appliance, its outdoor unit, the gateway itself and so on. Static, so it is
+# read on demand (HomeComK40Local.async_get_modules), not on every poll.
+LOCAL_SYSTEM_INFO_RESOURCE: Final[str] = "/system/basicInfo"
+# ModuleHwIdentStr of the gateway's own entry in that inventory.
+LOCAL_GATEWAY_HW_IDENT: Final[str] = "K40RF"
+
 LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
     # gateway / system identity
     "/gateway/versionFirmware",
@@ -514,6 +521,11 @@ LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
     "/heatSources/hs1/workingTime",
     "/heatSources/hs1/oduFanSpeed",
     "/heatSources/hs1/pumpVolumeFlow",
+    # The hs1 pump flow sits on its LOW_FLOW marker (65535) for hours on some
+    # K 40 RF systems while this heating-circuit signal carries the measured
+    # flow (bosch-homecom-hass#225). Not every gateway has it: a mixed hc1
+    # answers 404, which the unsupported cache then skips.
+    "/signals/SRC.HC1.FlowCtrl.PumpVolumeFlow",
     "/heatSources/hs1/refrigerant/status",
     "/heatSources/hs1/refrigerant/compressorActualSpeed",
     "/heatSources/hs1/refrigerant/compressorElecPowerActual",

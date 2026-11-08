@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from .const import LOCAL_GATEWAY_HW_IDENT
+
 
 @dataclass
 class ConnectionOptions:
@@ -92,6 +94,32 @@ class BHCDeviceK40Local:
     unsupported: tuple[str, ...] = ()
     dhw_mode: str | None = None
     hc_status: str | None = None
+
+
+@dataclass(frozen=True)
+class BHCLocalModule:
+    """One module of the K 40 RF gateway's ``/system/basicInfo`` inventory.
+
+    ``bus_id``/``token`` are the module's ``Id``/``Tok`` on the appliance bus
+    and together identify it within one system. ``product_name`` is missing on
+    some modules, the gateway itself among them. ``module_serial`` is ``None``
+    when the gateway sent it as a JSON number: it then arrives in lossy
+    scientific notation (``5.703731019068751e+21``) and must not be shown or
+    used as an identity.
+    """
+
+    bus_id: str | None
+    token: str | None
+    version: str | None
+    product_name: str | None
+    hw_ident: str | None
+    product_serial: str | None
+    module_serial: str | None
+
+    @property
+    def is_gateway(self) -> bool:
+        """Return whether this entry is the K 40 RF gateway itself."""
+        return self.hw_ident == LOCAL_GATEWAY_HW_IDENT
 
 
 @dataclass(frozen=True)
