@@ -4068,6 +4068,7 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
         "/resource/gateway/wifi/rssi": {"value": -44},
         "/resource/system/location/coordinates": {"value": {"lat": 50, "lon": 7}},
         "/resource/system/awayMode/enabled": {"value": "false"},
+        "/resource/heatSources/systemPressure": {"value": 1.8, "unitOfMeasure": "bar"},
     }
 
     needles = sorted(rrc2_substring_values.keys(), key=len, reverse=True)
@@ -4098,6 +4099,10 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
     assert result.device == DEVICE_ID
     assert len(result.zones) == 1
     assert result.zones[0]["temperatureActual"] == {"value": 20.0}
+    assert result.heat_sources["systemPressure"] == {
+        "value": 1.8,
+        "unitOfMeasure": "bar",
+    }
     assert result.zones[0]["temperatureHeatingSetpoint"] == {"value": 21.0}
     assert result.zones[0]["manualTemperatureHeating"] == {"value": 21.5}
     assert result.zones[0]["clockOverrideTemperatureHeating"] == {"value": 0.0}

@@ -50,6 +50,7 @@ from .const import (
     BOSCHCOM_ENDPOINT_HS_RETURN_TEMP,
     BOSCHCOM_ENDPOINT_HS_STARTS,
     BOSCHCOM_ENDPOINT_HS_SUPPLY_TEMP,
+    BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
     BOSCHCOM_ENDPOINT_HS_TYPE,
     BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
     BOSCHCOM_ENDPOINT_INDOOR_HUMIDITY,
@@ -443,6 +444,7 @@ class HomeComRrc2(HomeComK40):
             BOSCHCOM_ENDPOINT_HS_MODULATION,
             BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
             BOSCHCOM_ENDPOINT_HS_STARTS,
+            BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
             BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID,
             BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME,
             BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE,
@@ -467,6 +469,7 @@ class HomeComRrc2(HomeComK40):
         hs_modulation = bulk_response.get(BOSCHCOM_ENDPOINT_HS_MODULATION)
         hs_working_time = bulk_response.get(BOSCHCOM_ENDPOINT_HS_WORKING_TIME)
         hs_starts = bulk_response.get(BOSCHCOM_ENDPOINT_HS_STARTS)
+        hs_pressure = bulk_response.get(BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE)
         gw_uuid = bulk_response.get(BOSCHCOM_ENDPOINT_RRC2_GATEWAY_UUID)
         gw_time = bulk_response.get(BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIME)
         gw_timezone = bulk_response.get(BOSCHCOM_ENDPOINT_RRC2_GATEWAY_TIMEZONE)
@@ -666,6 +669,9 @@ class HomeComRrc2(HomeComK40):
             "modulation": hs_modulation or {},
             "workingTime": hs_working_time or {},
             "numberOfStarts": hs_starts or {},
+            # The boiler's water pressure, which the HomeCom app shows
+            # (bosch-homecom-hass#230). Empty when the gateway does not serve it.
+            "systemPressure": hs_pressure or {},
         }
 
         gateway_info = {
