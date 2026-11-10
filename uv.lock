@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1121,14 +1121,14 @@ wheels = [
 
 [[package]]
 name = "python-discovery"
-version = "1.9.2"
+version = "1.9.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/87/77b17c6d289a551d682826e228e3efa3199305a080541d991cb7b268a527/python_discovery-1.9.2.tar.gz", hash = "sha256:de397b9c4b09a5fb8bb4c51db3c0da71fb81d2283718d74fd1efaabffc32afbc", size = 140950, upload-time = "2026-11-03T05:04:25.117Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/55/70b46fae646bc6f5cb5e82569949d925cff1c7b5ce20ec4a11e0d977f8c6/python_discovery-1.9.5.tar.gz", hash = "sha256:86279f5d2728bc067de28b7ddc571be2eacc2ae0e7048f8629d2481a0f8848a2", size = 141121, upload-time = "2026-11-06T15:32:11.331Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/5b/d61e08d34eeb74eb88431243e3849551f0161de08659d55312955afd2a36/python_discovery-1.9.2-py3-none-any.whl", hash = "sha256:65857e689ba72aeb5517e68b7025430ed60372b78d037245e0bed3d41ae7ba65", size = 44201, upload-time = "2026-11-03T05:04:23.777Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/35/25bd092ca8a7e71192afdca67fbff4f797da74408e74ac3626e13b409ec0/python_discovery-1.9.5-py3-none-any.whl", hash = "sha256:a1fae8fca11e4bc61e38491c2aafff29e430b3c5e272d51ae52fb895bc4c0fac", size = 44377, upload-time = "2026-11-06T15:32:09.821Z" },
 ]
 
 [[package]]
