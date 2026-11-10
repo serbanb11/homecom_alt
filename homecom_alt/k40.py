@@ -2469,7 +2469,6 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_HS_HEAT_DEMAND,
             BOSCHCOM_ENDPOINT_HS_WORKING_TIME,
             BOSCHCOM_ENDPOINT_HS_TOTAL_CONSUMPTION,
-            BOSCHCOM_ENDPOINT_HS_SYSTEM_PRESSURE,
             BOSCHCOM_ENDPOINT_HS_EHEATER_STATUS,
             BOSCHCOM_ENDPOINT_HS_EMERGENCY_MODE,
             BOSCHCOM_ENDPOINT_HS_STANDBY_MODE,
@@ -2479,11 +2478,6 @@ class HomeComK40(HomeComAlt):
             BOSCHCOM_ENDPOINT_HS_DHW_CONSUMPTION,
             BOSCHCOM_ENDPOINT_HS_COOLING_CONSUMPTION,
             BOSCHCOM_ENDPOINT_HS_POOL_CONSUMPTION,
-            # Swimming pool (absent on non-pool devices; 404 -> None, tolerated)
-            BOSCHCOM_ENDPOINT_POOL_CURRENT_TEMP,
-            BOSCHCOM_ENDPOINT_POOL_SETPOINT_TEMP,
-            BOSCHCOM_ENDPOINT_POOL_ENABLED,
-            BOSCHCOM_ENDPOINT_POOL_ADDITIONAL_HEATER,
         ]
         bulk_response = await self.async_request_bulk(device_id, bulk_endpoints) or {}
 
