@@ -52,6 +52,7 @@ from .const import (
     OAUTH_PARAMS,
     OAUTH_PARAMS_BUDERUS,
     OAUTH_REFRESH_PARAMS,
+    TOKEN_TIMEOUT,
     URLENCODED,
 )
 from .exceptions import (
@@ -266,7 +267,11 @@ class HomeComAlt:
                 raise_for_status=True,
                 data=data if req_type != JSON else None,
                 json=data if req_type == JSON else None,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=(
+                    TOKEN_TIMEOUT
+                    if url == OAUTH_DOMAIN + OAUTH_ENDPOINT
+                    else DEFAULT_TIMEOUT
+                ),
                 headers=headers,
                 skip_auto_headers=["Accept"],
                 allow_redirects=True,

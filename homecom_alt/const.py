@@ -390,6 +390,11 @@ ATTR_TIMERS_ON: Final[str] = "timersOn"
 ATTR_TIMERS_OFF: Final[str] = "timersOff"
 
 DEFAULT_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=15)
+# SingleKey ID token requests. A refresh token is single-use: once SingleKey
+# has received the request it is spent, even if its answer never arrives.
+# Giving up on a slow answer therefore loses the session, and the retry with
+# the old token is refused, so these requests wait longer than API reads.
+TOKEN_TIMEOUT: Final[ClientTimeout] = ClientTimeout(total=60)
 
 URLENCODED: Final[int] = 2
 JSON: Final[int] = 1
