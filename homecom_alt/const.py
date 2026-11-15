@@ -527,6 +527,13 @@ LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
     # answers 404, which the unsupported cache then skips.
     "/signals/SRC.HC1.FlowCtrl.PumpVolumeFlow",
     "/heatSources/hs1/refrigerant/status",
+    # Speed of the heat source's own pump (PC0), in % (bosch-homecom-hass#240).
+    "/heatSources/hs1/refrigerant/heatCarrierPumpSpeed",
+    # Undocumented signal in kW. Despite its name it is the heat output the
+    # appliance calculates: it tracks the emon outputProduced counter, not the
+    # compressor's electrical draw (bosch-homecom-hass#240). Gateways without
+    # it answer 404, which the unsupported cache then skips.
+    "/signals/SRC.CUHP.HP1.CompressorPower",
     "/heatSources/hs1/refrigerant/compressorActualSpeed",
     "/heatSources/hs1/refrigerant/compressorElecPowerActual",
     "/heatSources/hs1/refrigerant/compressorTemp",
@@ -547,6 +554,10 @@ LOCAL_POLL_RESOURCES: Final[tuple[str, ...]] = (
     "/heatingCircuits/hc1/currentRoomSetpoint",
     "/heatingCircuits/hc1/currentSuWiMode",
     "/heatingCircuits/hc1/maxFlowTemp",
+    # HC1 supply temperature setpoint, the result of the heating curve. Its
+    # state markers OFF_HEAT (0) and OFF_COOL (90) are not setpoints
+    # (bosch-homecom-hass#240). Undocumented; 404 where absent.
+    "/signals/SC.HC1.FlowTempSetp",
     "/heatingCircuits/hc1/pumpStatus",
     "/heatingCircuits/hc2/pumpStatus",
     "/heatingCircuits/hc3/pumpStatus",

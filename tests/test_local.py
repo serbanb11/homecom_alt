@@ -1135,3 +1135,22 @@ def test_inventory_is_not_polled_but_the_pump_flow_signal_is() -> None:
     """The inventory is read on demand, not polled; the HC1 flow signal is polled."""
     assert LOCAL_SYSTEM_INFO_RESOURCE not in LOCAL_POLL_RESOURCES
     assert "/signals/SRC.HC1.FlowCtrl.PumpVolumeFlow" in LOCAL_POLL_RESOURCES
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/heatSources/hs1/pumpVolumeFlow",
+        "/heatSources/hs1/refrigerant/heatCarrierPumpSpeed",
+        "/signals/SRC.CUHP.HP1.CompressorPower",
+        "/signals/SC.HC1.FlowTempSetp",
+    ],
+)
+def test_heat_source_circuit_resources_are_polled(path: str) -> None:
+    """The heat source circuit, heat output and HC1 setpoint come with the poll."""
+    assert path in LOCAL_POLL_RESOURCES
+
+
+def test_poll_set_has_no_duplicates() -> None:
+    """Each resource is read once per poll."""
+    assert len(set(LOCAL_POLL_RESOURCES)) == len(LOCAL_POLL_RESOURCES)
