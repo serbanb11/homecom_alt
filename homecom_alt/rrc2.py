@@ -681,6 +681,14 @@ class HomeComRrc2(HomeComK40):
             "wifiRssi": gw_rssi or {},
         }
 
+        # The same energy history the K40 client reads. A CT200 on a gas
+        # boiler serves it (bosch-homecom-hass#242); a gateway without it
+        # answers 404, which becomes None.
+        energy_history, hourly_energy_history = await asyncio.gather(
+            self.async_get_energy_history(device_id),
+            self.async_get_energy_history_hourly(device_id),
+        )
+
         return BHCDeviceRrc2(
             device=device_id,
             firmware=firmware,
@@ -695,4 +703,6 @@ class HomeComRrc2(HomeComK40):
             devices=device_refs,
             gateway_info=gateway_info,
             system_location=system_location or {},
+            energy_history=energy_history,
+            hourly_energy_history=hourly_energy_history,
         )

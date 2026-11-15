@@ -4039,6 +4039,17 @@ def _make_rrc2(session):  # noqa: ANN001, ANN202
     return HomeComRrc2(session, _make_options(), DEVICE_ID, auth_provider=False)
 
 
+# Energy history of a CT200 on a gas boiler, shapes as the K40 client reads.
+_RRC2_DAILY = {
+    "id": "/energy/history",
+    "value": [{"d": "14-11-2026", "T": 7.0, "gCh": 41.2, "gHw": 6.8}],
+}
+_RRC2_HOURLY = {
+    "id": "/energy/historyHourly",
+    "value": [{"entries": [{"d": "14-11-2026", "h": 6, "gCh": 3.1, "gHw": 0.4}]}],
+}
+
+
 @pytest.mark.asyncio
 async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
     """Rrc2 update returns a BHCDeviceRrc2 with zones / hc / dhw populated."""
@@ -4091,12 +4102,24 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
             return _mock_json_response(_build_bulk_response(resource_paths, _resolve))
         if url.endswith("/resource/gateway/versionFirmware"):
             return _mock_json_response({"value": "1.0"})
+        if "energy/historyEntries" in url:
+            return _mock_json_response({"value": 2})
+        if "energy/historyHourly" in url:
+            return _mock_json_response(_RRC2_HOURLY)
+        if "energy/history?entry=1" in url:
+            return _mock_json_response(_RRC2_DAILY)
         return _mock_json_response({})
 
     with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
         result = await rrc2.async_update(DEVICE_ID)
 
     assert result.device == DEVICE_ID
+    # bosch-homecom-hass#242: the energy history the K40 client reads.
+    assert result.energy_history == _RRC2_DAILY
+    assert result.hourly_energy_history == {
+        **_RRC2_HOURLY,
+        "value": [{"entries": _RRC2_HOURLY["value"][0]["entries"]}],
+    }
     assert len(result.zones) == 1
     assert result.zones[0]["temperatureActual"] == {"value": 20.0}
     assert result.heat_sources["systemPressure"] == {
@@ -4120,6 +4143,31 @@ async def test_rrc2_async_update_returns_bhcdevicerrc2() -> None:
         "wifiRssi": {"value": -44},
     }
     assert result.system_location == {"value": {"lat": 50, "lon": 7}}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_rrc2_without_energy_history() -> None:
+    """A gateway that does not serve the energy history leaves both empty."""
+    session = ClientSession()
+    rrc2 = _make_rrc2(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+            return _mock_json_response(
+                _build_bulk_response(resource_paths, lambda _path: None)
+            )
+        # What _async_http_request returns for a 404.
+        return {}
+
+    with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await rrc2.async_update(DEVICE_ID)
+
+    assert result.energy_history is None
+    assert result.hourly_energy_history is None
 
     await session.close()
 

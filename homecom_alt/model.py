@@ -167,6 +167,11 @@ class BHCDeviceRrc2:
     devices: list | None
     gateway_info: dict | None
     system_location: dict | None
+    # Daily and hourly energy history (the boiler's gas input in kWh). Not in
+    # the app's rrc2 endpoint set, but CT200 gateways serve it
+    # (bosch-homecom-hass#242). None or empty where the gateway does not.
+    energy_history: list | None = None
+    hourly_energy_history: list | None = None
 
 
 @dataclass(frozen=True)
