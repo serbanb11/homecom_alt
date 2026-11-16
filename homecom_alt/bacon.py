@@ -49,6 +49,7 @@ import logging
 import os
 import ssl
 import threading
+import time
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -56,6 +57,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import paho.mqtt.client as mqtt
+from aiohttp import ClientError, ClientTimeout
 
 from .const import (
     BACON_AP_TYPE,
@@ -267,6 +269,149 @@ async def async_get_bacon_devices(
     if not isinstance(serials, list):
         return []
     return [{"deviceId": str(s), "deviceType": BACON_RAC_TYPE} for s in serials]
+
+
+# --- History service (GraphQL) -----------------------------------------------
+# The device's data-lake topics (RAC_EMON, RAC_EXTENDED; ``features.history``
+# in topics/meta) never reach the MQTT subscription: the backend stores them and
+# the HomeCom app reads them back over AWS AppSync at
+# https://history.{region}.bacon.bosch-tt-cw.com/graphql
+# (BaconEndpoints.historyService, ConsumptionsDataSourceImpl). The bearer token is
+# the same SingleKey access token the broker takes; its audience includes
+# ``bacon``. Ownership is checked per serial after authentication: someone else's
+# serial comes back as a ``PermissionError`` in ``errors`` with HTTP 200.
+BACON_HISTORY_PATH = "/graphql"
+# Rows of the extended record are looked for in this window. The device publishes
+# every ``dataLakeExtendedPublishInterval`` (1800 s in the wild), so two hours
+# holds several; a unit that has published nothing for that long has no current
+# reading to show.
+BACON_HISTORY_EXTENDED_WINDOW = 2 * 60 * 60
+_BACON_HISTORY_EXTENDED_LIMIT = 100
+_BACON_HISTORY_TIMEOUT = 30
+
+RAC_EMON_FIELDS: tuple[str, ...] = (
+    "totalElectricalEnergyConsumptionHeat",
+    "totalElectricalEnergyConsumptionCool",
+    "totalElectricalEnergyConsumptionDry",
+    "totalElectricalEnergyConsumptionFan",
+    "totalThermalEnergyOutputHeat",
+    "totalThermalEnergyOutputCool",
+)
+RAC_EXTENDED_FIELDS: tuple[str, ...] = (
+    "currentRealTimePower",
+    "currentPower",
+    "totalPowerConsumed",
+    "totalRunPower",
+    "outdoorTemp",
+    "humidity",
+    "compFreq",
+    "oduRunCurrent",
+    "oduInputVoltage",
+    "evaporatorTemp",
+    "condenserTemp",
+    "compDischargeTemp",
+    "indoorFanSpeed",
+    "outdoorFanSpeed",
+    "electronicEXV",
+    "numberOfRestarts",
+    "setTempWithComp",
+)
+
+# ``emon`` is the app's own lifetime-totals query (getAdditionalInformation):
+# the latest cumulative counters, whatever their age. ``extended`` has no app
+# query; it lists the raw rows of the window and the newest one is kept, so the
+# row order the service uses does not matter.
+_RAC_HISTORY_QUERY = (
+    "query racHistory($serialNumbers: [ID!]!, $serialNumber: ID!, "
+    "$now: AWSTimestamp!, $since: AWSTimestamp!, $limit: Int) { "
+    "emon: cumulateRacEmonRecords(serialNumbers: $serialNumbers, "
+    "timestamp: { between: [0, $now] timeZoneOffset: 0 firstDayOfWeek: MONDAY }, "
+    "interval: YEARLY, transformation: LATEST, groupFunction: SUM, limit: 1) "
+    "{ items { timestamp " + " ".join(RAC_EMON_FIELDS) + " } } "
+    "extended: listRacExtendedRecords(serialNumber: $serialNumber, "
+    "timestamp: { gt: $since }, limit: $limit) "
+    "{ items { timestamp " + " ".join(RAC_EXTENDED_FIELDS) + " } } }"
+)
+
+
+def _latest_item(node: Any) -> dict[str, Any] | None:
+    """Return the item with the highest ``timestamp`` of a GraphQL list node."""
+    items = node.get("items") if isinstance(node, dict) else None
+    rows = [
+        item
+        for item in items or []
+        if isinstance(item, dict) and isinstance(item.get("timestamp"), int)
+    ]
+    return max(rows, key=lambda item: item["timestamp"]) if rows else None
+
+
+async def async_get_rac_history(
+    session: ClientSession,
+    token: str,
+    serial: str,
+    region: str = BACON_DEFAULT_REGION,
+    *,
+    now: int | None = None,
+) -> dict[str, dict[str, Any] | None]:
+    """Read a bacon AC's energy totals and newest extended record.
+
+    Returns ``{"emon": {...} | None, "extended": {...} | None}``. ``emon`` holds
+    the lifetime counters (kWh); ``extended`` the newest row of the last
+    :data:`BACON_HISTORY_EXTENDED_WINDOW` seconds (``currentRealTimePower`` in
+    W, ``outdoorTemp``, ``compFreq`` …). Either is ``None`` when the service has
+    nothing for it, including a serial the account may not read.
+
+    Best effort by design: every failure, a 401 included, is an
+    :class:`ApiError`, never :class:`AuthFailedError`. Whether the session is
+    still valid is the broker's and the token endpoint's call, not this one's.
+    """
+    now = int(time.time()) if now is None else now
+    body = {
+        "operationName": "racHistory",
+        "query": _RAC_HISTORY_QUERY,
+        "variables": {
+            "serialNumbers": [serial],
+            "serialNumber": serial,
+            "now": now,
+            "since": now - BACON_HISTORY_EXTENDED_WINDOW,
+            "limit": _BACON_HISTORY_EXTENDED_LIMIT,
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": BACON_USER_AGENT,
+    }
+    url = f"https://{bacon_host('history', region)}{BACON_HISTORY_PATH}"
+    try:
+        async with session.post(
+            url,
+            json=body,
+            headers=headers,
+            timeout=ClientTimeout(total=_BACON_HISTORY_TIMEOUT),
+        ) as resp:
+            if resp.status != HTTPStatus.OK:
+                raise ApiError(f"Bacon history request failed: {resp.status}")
+            payload = await resp.json(content_type=None)
+    except (ClientError, TimeoutError, ValueError) as err:
+        raise ApiError(f"Bacon history request failed: {err}") from err
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        errors = payload.get("errors") if isinstance(payload, dict) else payload
+        raise ApiError(f"Bacon history query failed: {errors}")
+    for error in payload.get("errors") or []:
+        if isinstance(error, dict):
+            _LOGGER.debug(
+                "Bacon history %s: %s %s",
+                error.get("path"),
+                error.get("errorType"),
+                error.get("message"),
+            )
+    data = payload["data"]
+    return {
+        "emon": _latest_item(data.get("emon")),
+        "extended": _latest_item(data.get("extended")),
+    }
 
 
 class BaconMqttClient:

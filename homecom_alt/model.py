@@ -213,6 +213,10 @@ class BHCDeviceBacon:
       does not carry at all.
     * ``metadata`` — typed capability metadata (allowed modes, setpoint bounds).
     * ``info`` — identity and health (``online``, firmware, signal strength).
+
+    ``history`` comes from the history service, not MQTT (ACs only, see
+    ``bacon.async_get_rac_history``): ``{"emon": …, "extended": …}``, or
+    ``None`` until it has been read.
     """
 
     device: dict | None
@@ -222,6 +226,7 @@ class BHCDeviceBacon:
     sensor: dict | None = None
     metadata: dict | None = None
     info: dict | None = None
+    history: dict | None = None
 
 
 # The AC was the only bacon family before purifiers were supported.

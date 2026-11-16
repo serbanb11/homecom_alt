@@ -18,6 +18,7 @@ from homecom_alt.bacon import (
     HomeComBaconRac,
     async_classify_bacon_device,
     async_get_bacon_devices,
+    async_get_rac_history,
     classify_bacon_device,
     decode_jwt_exp,
     decode_jwt_sub,
@@ -86,7 +87,9 @@ class _FakeResponse:
     async def __aexit__(self, *exc: object) -> bool:
         return False
 
-    async def json(self) -> Any:
+    async def json(self, content_type: str | None = "application/json") -> Any:
+        if isinstance(self._data, Exception):
+            raise self._data
         return self._data
 
 
@@ -97,6 +100,12 @@ class _FakeSession:
 
     def get(self, url: str, headers: dict | None = None) -> _FakeResponse:
         self.last_headers = headers
+        return self._response
+
+    def post(self, url: str, **kwargs: Any) -> _FakeResponse:
+        self.last_url = url
+        self.last_headers = kwargs.get("headers")
+        self.last_json = kwargs.get("json")
         return self._response
 
 
@@ -118,6 +127,115 @@ async def test_async_get_bacon_devices_unauthorized() -> None:
     session = _FakeSession(_FakeResponse(401, None))
     with pytest.raises(AuthFailedError):
         await async_get_bacon_devices(session, "token")
+
+
+# ---------------------------------------------------------------------------
+# async_get_rac_history (history service, GraphQL)
+# ---------------------------------------------------------------------------
+
+_EMON = {
+    "timestamp": 1763251200,
+    "totalElectricalEnergyConsumptionHeat": 12.5,
+    "totalElectricalEnergyConsumptionCool": 71.4,
+    "totalElectricalEnergyConsumptionDry": 0.3,
+    "totalElectricalEnergyConsumptionFan": 0.1,
+    "totalThermalEnergyOutputHeat": 40.2,
+    "totalThermalEnergyOutputCool": 387.4,
+}
+
+
+def _extended(timestamp: int, power: float) -> dict:
+    return {"timestamp": timestamp, "currentRealTimePower": power, "outdoorTemp": 6.5}
+
+
+@pytest.mark.asyncio
+async def test_rac_history_returns_totals_and_newest_extended_row() -> None:
+    """The newest extended row wins whatever order the service lists them in."""
+    payload = {
+        "data": {
+            "emon": {"items": [_EMON]},
+            "extended": {
+                "items": [
+                    _extended(1763290000, 420.0),
+                    _extended(1763291800, 515.0),
+                    _extended(1763288200, 380.0),
+                ]
+            },
+        }
+    }
+    session = _FakeSession(_FakeResponse(200, payload))
+
+    history = await async_get_rac_history(session, "tok", "86DM-1", now=1763292000)
+
+    assert history == {"emon": _EMON, "extended": _extended(1763291800, 515.0)}
+    assert session.last_url == "https://history.euc1.bacon.bosch-tt-cw.com/graphql"
+    assert session.last_headers["Authorization"] == "Bearer tok"
+    variables = session.last_json["variables"]
+    assert variables["serialNumbers"] == ["86DM-1"]
+    assert variables["serialNumber"] == "86DM-1"
+    assert variables["now"] == 1763292000
+    assert variables["since"] == 1763292000 - 2 * 60 * 60
+
+
+@pytest.mark.asyncio
+async def test_rac_history_region() -> None:
+    """The region picks the host, as for the broker and the claiming service."""
+    session = _FakeSession(_FakeResponse(200, {"data": {}}))
+    await async_get_rac_history(session, "tok", "86DM-1", "use1", now=0)
+    assert session.last_url == "https://history.use1.bacon.bosch-tt-cw.com/graphql"
+
+
+@pytest.mark.asyncio
+async def test_rac_history_serial_not_readable() -> None:
+    """A serial the account may not read is no data, not an error."""
+    payload = {
+        "data": {"emon": None, "extended": None},
+        "errors": [
+            {
+                "path": ["emon"],
+                "errorType": "PermissionError",
+                "message": "User does not have permission to access serial number x",
+            }
+        ],
+    }
+    session = _FakeSession(_FakeResponse(200, payload))
+    history = await async_get_rac_history(session, "tok", "x", now=0)
+    assert history == {"emon": None, "extended": None}
+
+
+@pytest.mark.asyncio
+async def test_rac_history_no_recent_extended_row() -> None:
+    """Totals still come back when the unit published nothing lately."""
+    payload = {"data": {"emon": {"items": [_EMON]}, "extended": {"items": []}}}
+    session = _FakeSession(_FakeResponse(200, payload))
+    history = await async_get_rac_history(session, "tok", "x", now=0)
+    assert history == {"emon": _EMON, "extended": None}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403, 500])
+async def test_rac_history_http_error_is_never_an_auth_failure(status: int) -> None:
+    """Even a 401 is an ApiError: this call must never start a reauth."""
+    session = _FakeSession(_FakeResponse(status, None))
+    with pytest.raises(ApiError) as err:
+        await async_get_rac_history(session, "tok", "x", now=0)
+    assert not isinstance(err.value, AuthFailedError)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"data": None, "errors": [{"message": "Validation error"}]},
+        ["not", "an", "object"],
+        ValueError("not json"),
+    ],
+)
+async def test_rac_history_unusable_answer(payload: Any) -> None:
+    """A rejected query or a body that is not GraphQL JSON is an ApiError."""
+    session = _FakeSession(_FakeResponse(200, payload))
+    with pytest.raises(ApiError):
+        await async_get_rac_history(session, "tok", "x", now=0)
 
 
 # ---------------------------------------------------------------------------
