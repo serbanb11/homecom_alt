@@ -4281,6 +4281,129 @@ def test_log_endpoint_status_demotes_persistent_500(caplog) -> None:  # noqa: AN
     assert caplog.records[-1].levelname == "WARNING"
 
 
+def _bulk_statuses_response(device_id, statuses):  # noqa: ANN001, ANN202
+    """Build a bulk response with one (server status, gateway status) per path.
+
+    A path whose gateway status is 200 carries ``{"value": 1}``.
+    """
+    paths = []
+    for path, (server_status, gateway_status) in statuses.items():
+        entry: dict[str, object] = {"resourcePath": path, "serverStatus": server_status}
+        if server_status == HTTPStatus.OK.value:
+            entry["gatewayResponse"] = {
+                "status": gateway_status,
+                "payload": {"value": 1},
+            }
+        paths.append(entry)
+    return _mock_json_response([{"gatewayId": device_id, "resourcePaths": paths}])
+
+
+def _warnings(caplog):  # noqa: ANN001, ANN202
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "homecom_alt.base" and r.levelname == "WARNING"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_bulk_gateway_errors_warn_once_per_outage(caplog) -> None:  # noqa: ANN001
+    """A cloud outage logs one warning, not one per endpoint and poll.
+
+    During an outage every endpoint of a bulk request answers 502/504. That
+    used to log a warning for each of them on every poll (about 40 lines per
+    poll on a K 40 RF). Now the first request warns once with a summary, the
+    following ones log at debug, and the first request without a gateway error
+    ends the outage, so the next one warns again.
+    """
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+    ok = (HTTPStatus.OK.value, HTTPStatus.OK.value)
+    timeout = (HTTPStatus.GATEWAY_TIMEOUT.value, None)
+    bad_gateway = (HTTPStatus.OK.value, HTTPStatus.BAD_GATEWAY.value)
+    paths = ["/system/a", "/system/b", "/system/c"]
+    down = dict(zip(paths, [timeout, timeout, bad_gateway], strict=True))
+    up = dict.fromkeys(paths, ok)
+
+    async def bulk(statuses):  # noqa: ANN001, ANN202
+        with patch.object(
+            bhc,
+            "_async_http_request",
+            new=AsyncMock(return_value=_bulk_statuses_response(DEVICE_ID, statuses)),
+        ):
+            return await bhc._async_request_bulk_single(DEVICE_ID, paths)
+
+    with caplog.at_level("DEBUG", logger="homecom_alt.base"):
+        assert await bulk(down) == {}
+        first = _warnings(caplog)
+        assert len(first) == 1
+        assert "3 of 3 endpoints" in first[0]
+        assert "502, 504" in first[0]
+        # The per-endpoint lines are still there, at debug level.
+        assert any(
+            r.levelname == "DEBUG" and "/system/b returned 504" in r.getMessage()
+            for r in caplog.records
+        )
+        assert bhc._last_endpoint_status[DEVICE_ID, "/system/c"] == 502
+
+        caplog.clear()
+        assert await bulk(down) == {}
+        assert _warnings(caplog) == []
+
+        caplog.clear()
+        assert await bulk(up) == {path: {"value": 1} for path in paths}
+        assert _warnings(caplog) == []
+        assert (DEVICE_ID, "/system/c") not in bhc._last_endpoint_status
+
+        caplog.clear()
+        await bulk(down)
+        assert len(_warnings(caplog)) == 1
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_bulk_gateway_errors_keep_other_statuses_and_devices(caplog) -> None:  # noqa: ANN001
+    """Only gateway errors are summarised, and only for the device they hit.
+
+    A 403 keeps its debug line and a 500 its own warning (hass#176 demotion).
+    Readings that did arrive are returned next to the failed ones, and an
+    outage of one gateway does not silence the warning for another.
+    """
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+    statuses = {
+        "/system/ok": (HTTPStatus.OK.value, HTTPStatus.OK.value),
+        "/system/slow": (HTTPStatus.GATEWAY_TIMEOUT.value, None),
+        "/system/forbidden": (HTTPStatus.FORBIDDEN.value, None),
+        "/system/broken": (HTTPStatus.INTERNAL_SERVER_ERROR.value, None),
+    }
+
+    async def bulk(device_id):  # noqa: ANN001, ANN202
+        with patch.object(
+            bhc,
+            "_async_http_request",
+            new=AsyncMock(return_value=_bulk_statuses_response(device_id, statuses)),
+        ):
+            return await bhc._async_request_bulk_single(device_id, list(statuses))
+
+    with caplog.at_level("DEBUG", logger="homecom_alt.base"):
+        assert await bulk(DEVICE_ID) == {"/system/ok": {"value": 1}}
+        warnings = _warnings(caplog)
+        assert len(warnings) == 2
+        assert "Endpoint /system/broken returned 500" in warnings
+        assert any("1 of 4 endpoints" in w and "504" in w for w in warnings)
+        assert not any("/system/forbidden" in w for w in warnings)
+
+        caplog.clear()
+        await bulk("other-gateway")
+        assert any(
+            "for device other-gateway returned 504" in w for w in _warnings(caplog)
+        )
+
+    await session.close()
+
+
 @pytest.mark.asyncio
 async def test_async_get_firmware_or_default_falls_back_on_not_responding() -> None:
     """A non-responding firmware endpoint must not abort the caller (#171)."""

@@ -84,6 +84,17 @@ _EXPECTED_ENDPOINT_STATUSES: frozenset[int] = frozenset(
 # can also be a recoverable cloud outage.
 _SERVER_ERROR_DEMOTE_THRESHOLD = 3
 
+# Per-endpoint bulk statuses that mean the cloud could not reach the gateway.
+# During such an outage every endpoint of a bulk request answers like this, so
+# they are summarised in one warning per outage instead of one per endpoint.
+_GATEWAY_ERROR_STATUSES: frozenset[int] = frozenset(
+    {
+        HTTPStatus.BAD_GATEWAY.value,
+        HTTPStatus.SERVICE_UNAVAILABLE.value,
+        HTTPStatus.GATEWAY_TIMEOUT.value,
+    }
+)
+
 
 class HomeComAlt:
     """Main class to perform HomeCom Easy requests."""
@@ -107,6 +118,9 @@ class HomeComAlt:
         # Last non-OK bulk status per (device, endpoint), cleared on success, so
         # a device class can say why a required endpoint produced no payload.
         self._last_endpoint_status: dict[tuple[str, str], int] = {}
+        # Devices whose current gateway-error outage has already been warned
+        # about; cleared by the first bulk request that gets none.
+        self._gateway_error_outages: set[str] = set()
 
     @property
     def refresh_token(self) -> str | None:
@@ -184,24 +198,24 @@ class HomeComAlt:
             return None
 
         result: dict[str, Any] = {}
+        gateway_errors: list[tuple[str, int]] = []
         try:
             device_response = json_response[0]
             endpoint_responses = device_response["resourcePaths"]
             for endpoint_response in endpoint_responses:
                 returned_path = endpoint_response["resourcePath"]
                 endpoint = sent_to_original.get(returned_path, returned_path)
-                server_status = endpoint_response["serverStatus"]
-                if server_status != HTTPStatus.OK.value:
-                    self._last_endpoint_status[device_id, endpoint] = server_status
-                    self._log_endpoint_status(endpoint, server_status)
-                    continue
-                device_endpoint_response = endpoint_response["gatewayResponse"]
-                device_endpoint_response_status = device_endpoint_response["status"]
-                if device_endpoint_response_status != HTTPStatus.OK.value:
-                    self._last_endpoint_status[device_id, endpoint] = (
-                        device_endpoint_response_status
-                    )
-                    self._log_endpoint_status(endpoint, device_endpoint_response_status)
+                status = endpoint_response["serverStatus"]
+                if status == HTTPStatus.OK.value:
+                    device_endpoint_response = endpoint_response["gatewayResponse"]
+                    status = device_endpoint_response["status"]
+                if status != HTTPStatus.OK.value:
+                    self._last_endpoint_status[device_id, endpoint] = status
+                    if status in _GATEWAY_ERROR_STATUSES:
+                        _LOGGER.debug("Endpoint %s returned %s", endpoint, status)
+                        gateway_errors.append((endpoint, status))
+                    else:
+                        self._log_endpoint_status(endpoint, status)
                     continue
                 payload = device_endpoint_response["payload"]
                 self._server_error_counts.pop(endpoint, None)
@@ -209,8 +223,40 @@ class HomeComAlt:
                 result[endpoint] = payload
         except (KeyError, IndexError, TypeError):
             return None
+        if gateway_errors:
+            self._log_gateway_errors(device_id, gateway_errors, len(endpoints))
         else:
-            return result
+            self._gateway_error_outages.discard(device_id)
+        return result
+
+    def _log_gateway_errors(
+        self, device_id: str, errors: list[tuple[str, int]], requested: int
+    ) -> None:
+        """Summarise the gateway errors of one bulk request in a single line.
+
+        Only the first bulk request of an outage warns; later ones log at
+        debug level until a bulk request for the device gets no gateway error.
+        """
+        statuses = ", ".join(str(s) for s in sorted({status for _, status in errors}))
+        if device_id in self._gateway_error_outages:
+            _LOGGER.debug(
+                "%s of %s endpoints for device %s still returned %s",
+                len(errors),
+                requested,
+                device_id,
+                statuses,
+            )
+            return
+        self._gateway_error_outages.add(device_id)
+        _LOGGER.warning(
+            "%s of %s endpoints for device %s returned %s (e.g. %s); further "
+            "gateway errors are logged at debug level until it answers again",
+            len(errors),
+            requested,
+            device_id,
+            statuses,
+            errors[0][0],
+        )
 
     def _log_endpoint_status(self, endpoint: str, status: int) -> None:
         """Log a non-OK per-endpoint bulk status.
