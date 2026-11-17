@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import logging
 import threading
 from datetime import UTC, datetime
 from typing import Any, Self
@@ -201,6 +202,31 @@ async def test_rac_history_serial_not_readable() -> None:
     session = _FakeSession(_FakeResponse(200, payload))
     history = await async_get_rac_history(session, "tok", "x", now=0)
     assert history == {"emon": None, "extended": None}
+
+
+@pytest.mark.asyncio
+async def test_rac_history_never_logs_the_serial(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The service's error messages name the serial; logs and errors must not."""
+    message = "User does not have permission to access serial number 86DM123456789"
+    error = {"path": ["emon"], "errorType": "PermissionError", "message": message}
+    caplog.set_level(logging.DEBUG, logger="homecom_alt")
+
+    partial = {"data": {"emon": None, "extended": None}, "errors": [error]}
+    await async_get_rac_history(
+        _FakeSession(_FakeResponse(200, partial)), "tok", "86DM123456789", now=0
+    )
+    assert "PermissionError" in caplog.text
+    assert "86DM123456789" not in caplog.text
+
+    rejected = {"data": None, "errors": [error]}
+    with pytest.raises(ApiError) as exc_info:
+        await async_get_rac_history(
+            _FakeSession(_FakeResponse(200, rejected)), "tok", "86DM123456789", now=0
+        )
+    assert "PermissionError" in str(exc_info.value)
+    assert "86DM123456789" not in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -685,8 +711,17 @@ async def test_get_rejected_still_raises(monkeypatch: pytest.MonkeyPatch) -> Non
 
     _deliver(client, "users/sub-1/devices/86DM-1/shadows/state/get/rejected", {})
 
-    with pytest.raises(ApiError):
+    with pytest.raises(ApiError, match=r"state shadow get rejected for 86DM\*\*\*$"):
         await task
+
+
+@pytest.mark.parametrize(
+    ("serial", "masked"),
+    [("86DM123456789", "86DM***"), ("86DM", "***"), ("", "***")],
+)
+def test_mask_serial(serial: str, masked: str) -> None:
+    """Enough of a serial to tell devices apart, not enough to identify one."""
+    assert bacon.mask_serial(serial) == masked
 
 
 @pytest.mark.asyncio

@@ -241,6 +241,21 @@ def generate_client_id() -> str:
     return hashlib.sha256(os.urandom(16)).hexdigest()
 
 
+_SERIAL_PREFIX_KEPT = 4
+
+
+def mask_serial(serial: str) -> str:
+    """Shorten a serial for logs and errors: devices stay distinguishable.
+
+    A bacon serial is the device's identity on Bosch's backend, and logs end
+    up pasted into public issues.
+    """
+    serial = str(serial)
+    if len(serial) <= _SERIAL_PREFIX_KEPT:
+        return "***"
+    return f"{serial[:_SERIAL_PREFIX_KEPT]}***"
+
+
 def bacon_host(service: str, region: str = BACON_DEFAULT_REGION) -> str:
     """Build a bacon backend hostname for ``service`` in ``region``."""
     return BACON_HOST_TEMPLATE.format(service=service, region=region)
@@ -345,6 +360,13 @@ def _latest_item(node: Any) -> dict[str, Any] | None:
     return max(rows, key=lambda item: item["timestamp"]) if rows else None
 
 
+def _error_types(errors: Any) -> list[Any] | str:
+    """Return the GraphQL error types, without their serial-bearing messages."""
+    if isinstance(errors, list):
+        return [e.get("errorType") if isinstance(e, dict) else "?" for e in errors]
+    return type(errors).__name__
+
+
 async def async_get_rac_history(
     session: ClientSession,
     token: str,
@@ -398,14 +420,12 @@ async def async_get_rac_history(
         raise ApiError(f"Bacon history request failed: {err}") from err
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
         errors = payload.get("errors") if isinstance(payload, dict) else payload
-        raise ApiError(f"Bacon history query failed: {errors}")
+        raise ApiError(f"Bacon history query failed: {_error_types(errors)}")
+    # Only the path and type: the service's messages name the serial number.
     for error in payload.get("errors") or []:
         if isinstance(error, dict):
             _LOGGER.debug(
-                "Bacon history %s: %s %s",
-                error.get("path"),
-                error.get("errorType"),
-                error.get("message"),
+                "Bacon history %s: %s", error.get("path"), error.get("errorType")
             )
     data = payload["data"]
     return {
@@ -742,7 +762,9 @@ class BaconMqttClient:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError as err:
             self._get_futures.pop((serial, shadow), None)
-            raise ApiError(f"Timed out reading {shadow} shadow for {serial}") from err
+            raise ApiError(
+                f"Timed out reading {shadow} shadow for {mask_serial(serial)}"
+            ) from err
 
     async def async_set_desired(self, serial: str, desired: dict[str, Any]) -> None:
         """Publish a partial ``desired`` shadow update for ``serial``."""
@@ -835,7 +857,7 @@ class BaconMqttClient:
         """
         shadow, _, verb = path.partition("/")
         if verb == "get/rejected":
-            exc = ApiError(f"{shadow} shadow get rejected for {serial}")
+            exc = ApiError(f"{shadow} shadow get rejected for {mask_serial(serial)}")
             self._resolve_get(serial, shadow, exc=exc)
             return
 
