@@ -32,11 +32,13 @@ from homecom_alt import (
     NotRespondingError,
 )
 from homecom_alt.const import (
+    DEFAULT_TIMEOUT,
     JSON,
     OAUTH_DOMAIN,
     OAUTH_ENDPOINT,
     OAUTH_PARAMS,
     OAUTH_PARAMS_BUDERUS,
+    TOKEN_TIMEOUT,
 )
 
 # ---------------------------------------------------------------------------
@@ -213,6 +215,31 @@ async def test_async_http_request_bad_request() -> None:
             "post", "https://singlekey-id.com/auth/connect/token"
         )
         assert response is None
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_async_http_request_token_url_waits_longer() -> None:
+    """The SingleKey token request gets TOKEN_TIMEOUT, API reads DEFAULT_TIMEOUT.
+
+    A refresh token is spent once SingleKey has the request, so giving up on a
+    slow answer after 15 s lost the session; the retry was refused.
+    """
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.return_value = MagicMock(status=HTTPStatus.OK.value)
+        await bhc._async_http_request("post", OAUTH_DOMAIN + OAUTH_ENDPOINT, {}, 2)
+        assert mock_request.call_args.kwargs["timeout"] is TOKEN_TIMEOUT
+
+        await bhc._async_http_request("get", "https://example.com/resource")
+        assert mock_request.call_args.kwargs["timeout"] is DEFAULT_TIMEOUT
+
+    assert TOKEN_TIMEOUT.total is not None
+    assert DEFAULT_TIMEOUT.total is not None
+    assert TOKEN_TIMEOUT.total > DEFAULT_TIMEOUT.total
 
     await session.close()
 
