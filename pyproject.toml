@@ -39,7 +39,7 @@ module-root = ""
 dev = [
     "aioresponses==0.7.9",
     "coverage==7.17.0",
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "pre-commit==4.7.0",
     "pytest==9.2.0",
     "pytest-asyncio==1.4.1.post1",
