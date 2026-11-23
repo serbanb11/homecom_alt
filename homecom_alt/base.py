@@ -377,6 +377,26 @@ class HomeComAlt:
 
         return resp
 
+    async def _async_get_optional(self, url: str) -> Any:
+        """GET a resource the device may not serve, as {} when it refuses.
+
+        Some gateways refuse optional resources with a status other than
+        403/404: a CT200 answers /energy/historyHourly with 412, which failed
+        the whole update (bosch-homecom-hass#245). A refused read returns {},
+        like a 404 does. A 4xx is remembered for _NOT_FOUND_CACHE_TTL so the
+        resource is not asked for again on every poll; a 5xx is not.
+        AuthFailedError and NotRespondingError still propagate.
+        """
+        try:
+            return await self._async_http_request("get", url)
+        except ApiError as error:
+            cause = error.__cause__
+            status = cause.status if isinstance(cause, ClientResponseError) else None
+            _LOGGER.debug("Optional endpoint %s unavailable: %s", url, error)
+            if status is not None and 400 <= status < 500:  # noqa: PLR2004
+                self._not_found_cache[url] = time.monotonic()
+            return {}
+
     @staticmethod
     async def _to_data(response: Any) -> Any | None:
         if not response:

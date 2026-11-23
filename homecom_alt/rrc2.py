@@ -683,7 +683,8 @@ class HomeComRrc2(HomeComK40):
 
         # The same energy history the K40 client reads. A CT200 on a gas
         # boiler serves it (bosch-homecom-hass#242); a gateway without it
-        # answers 404, which becomes None.
+        # refuses the read (404, or 412 on some CT200s, hass#245), which
+        # becomes None instead of failing the update.
         energy_history, hourly_energy_history = await asyncio.gather(
             self.async_get_energy_history(device_id),
             self.async_get_energy_history_hourly(device_id),

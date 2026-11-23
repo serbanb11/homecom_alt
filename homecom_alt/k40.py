@@ -2167,7 +2167,7 @@ class HomeComK40(HomeComAlt):
         if entry is not None:
             url += f"?entry={entry}"
 
-        response = await self._async_http_request("get", url)
+        response = await self._async_get_optional(url)
         return await self._to_data(response)
 
     async def async_get_energy_history_hourly(self, device_id: str) -> Any:
@@ -2192,7 +2192,7 @@ class HomeComK40(HomeComAlt):
             if next_cursor is not None:
                 url += f"?next={next_cursor}"
 
-            response = await self._async_http_request("get", url)
+            response = await self._async_get_optional(url)
             page = await self._to_data(response)
 
             if not page:
@@ -2224,8 +2224,7 @@ class HomeComK40(HomeComAlt):
     async def async_get_energy_gas_unit(self, device_id: str) -> Any:
         """Get energy gas unit."""
         await self.get_token()
-        response = await self._async_http_request(
-            "get",
+        response = await self._async_get_optional(
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id
@@ -2236,8 +2235,7 @@ class HomeComK40(HomeComAlt):
     async def async_get_energy_history_entries(self, device_id: str) -> Any:
         """Get the total number of available hourly energy history entries."""
         await self.get_token()
-        response = await self._async_http_request(
-            "get",
+        response = await self._async_get_optional(
             BOSCHCOM_DOMAIN
             + BOSCHCOM_ENDPOINT_GATEWAYS
             + device_id

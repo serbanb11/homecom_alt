@@ -4199,6 +4199,146 @@ async def test_rrc2_without_energy_history() -> None:
     await session.close()
 
 
+def _refused(url, status):  # noqa: ANN001, ANN202
+    """Build the ApiError _async_http_request raises for an unhandled status."""
+    error = ApiError(f"Invalid response from url {url}: {status}")
+    error.__cause__ = ClientResponseError(None, (), status=status)
+    return error
+
+
+@pytest.mark.asyncio
+async def test_rrc2_energy_history_refused_with_412() -> None:
+    """A CT200 that answers the energy history with 412 still updates (hass#245)."""
+    session = ClientSession()
+    rrc2 = _make_rrc2(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            posted_data = args[0] if args else kwargs.get("data", [{}])
+            resource_paths = posted_data[0].get("resourcePaths", [])
+            return _mock_json_response(
+                _build_bulk_response(resource_paths, lambda _path: None)
+            )
+        if "/energy/" in url:
+            raise _refused(url, HTTPStatus.PRECONDITION_FAILED.value)
+        return _mock_json_response({})
+
+    with patch.object(rrc2, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await rrc2.async_update(DEVICE_ID)
+
+    assert result.device == DEVICE_ID
+    assert result.energy_history is None
+    assert result.hourly_energy_history is None
+    # The refused reads are remembered, so the next poll skips them.
+    assert any("historyHourly" in url for url in rrc2._not_found_cache)
+    assert any("historyEntries" in url for url in rrc2._not_found_cache)
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_k40_energy_history_refused_with_412() -> None:
+    """The K40 update survives the energy endpoints answering 412."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if "bulk" in url:
+            return _k40_bulk_route(url, args, kwargs)
+        if "/energy/" in url:
+            raise _refused(url, HTTPStatus.PRECONDITION_FAILED.value)
+        return _mock_json_response({})
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_update(DEVICE_ID)
+
+    assert result.energy_history is None
+    assert result.hourly_energy_history is None
+    assert result.energy_gas_unit is None
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_energy_history_hourly_keeps_pages_before_a_refusal() -> None:
+    """A refused later page keeps the hourly entries already read."""
+    session = ClientSession()
+    k40 = _make_k40(session)
+    first = {
+        "id": "/energy/historyHourly",
+        "value": [{"entries": [{"h": 6, "gCh": 3.1}], "next": 2}],
+    }
+
+    async def route(method, url, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        if url.endswith("?next=2"):
+            raise _refused(url, HTTPStatus.PRECONDITION_FAILED.value)
+        return _mock_json_response(first)
+
+    with patch.object(k40, "_async_http_request", new=AsyncMock(side_effect=route)):
+        result = await k40.async_get_energy_history_hourly(DEVICE_ID)
+
+    assert result == {**first, "value": [{"entries": [{"h": 6, "gCh": 3.1}]}]}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_optional_412_is_cached() -> None:
+    """A 4xx on an optional read returns {} and is not requested again."""
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.PRECONDITION_FAILED
+        )
+        assert await bhc._async_get_optional("http://test.com/x") == {}
+        assert await bhc._async_get_optional("http://test.com/x") == {}
+        assert mock_request.call_count == 1
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_get_optional_500_is_not_cached() -> None:
+    """A 5xx on an optional read returns {} but is asked for again."""
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(
+            None, (), status=HTTPStatus.INTERNAL_SERVER_ERROR
+        )
+        assert await bhc._async_get_optional("http://test.com/x") == {}
+        assert await bhc._async_get_optional("http://test.com/x") == {}
+        assert mock_request.call_count == 2
+        assert bhc._not_found_cache == {}
+
+    await session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "exception"),
+    [
+        (HTTPStatus.UNAUTHORIZED, AuthFailedError),
+        (HTTPStatus.TOO_MANY_REQUESTS, NotRespondingError),
+    ],
+)
+async def test_get_optional_propagates_auth_and_rate_limit(status, exception) -> None:  # noqa: ANN001
+    """An optional read still raises for a failed login or rate limiting."""
+    session = ClientSession()
+    bhc = await HomeComAlt.create(session, _make_options(), auth_provider=True)
+
+    with patch.object(ClientSession, "request", new=AsyncMock()) as mock_request:
+        mock_request.side_effect = ClientResponseError(None, (), status=status)
+        with pytest.raises(exception):
+            await bhc._async_get_optional("http://test.com/x")
+        assert bhc._not_found_cache == {}
+
+    await session.close()
+
+
 @pytest.mark.asyncio
 async def test_rrc2_async_set_zone_manual_temp_heating() -> None:
     """Setpoint PUT issues correct URL and body."""
